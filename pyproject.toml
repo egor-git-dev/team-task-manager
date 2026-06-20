@@ -1,0 +1,9 @@
+[project]
+name = "team-task-manager"
+version = "0.1.0"
+description = "Final FastAPI learning project"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+]
