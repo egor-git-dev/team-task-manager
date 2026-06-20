@@ -1,11 +1,10 @@
 from fastapi import FastAPI
 
+from app.api.v1.router import api_router as api_v1_router
+
 app = FastAPI(
     title="Team Task Manager",
     version="0.1.0",
 )
 
-
-@app.get("/health")
-def health_check():
-    return {"status": "ok"}
+app.include_router(api_v1_router, prefix="/api/v1")
