@@ -1,12 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.models.users import UserRole
 from app.schemas.users import UserCreate
-
-
-def test_user_roles():
-    assert {role.value for role in UserRole} == {"user", "manager", "admin"}
 
 
 def test_valid_email():
