@@ -6,7 +6,7 @@ from app.schemas.users import UserCreate
 from app.core.security import get_password_hash
 
 
-async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
+async def create_user(user_data: UserCreate, db: AsyncSession) -> User:
     user = User(
         email=user_data.email,
         hashed_password=get_password_hash(user_data.password),
@@ -19,7 +19,7 @@ async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
     return user
 
 
-async def get_user_by_email(db: AsyncSession, user_email: str) -> User | None:
+async def get_user_by_email(user_email: str, db: AsyncSession) -> User | None:
     query = select(User).where(User.email == user_email)
     result = await db.execute(query)
 

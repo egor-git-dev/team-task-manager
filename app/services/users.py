@@ -9,8 +9,8 @@ class UserAlreadyExistsError(Exception):
     pass
 
 
-async def register_user(db: AsyncSession, user_data: UserCreate) -> User:
-    existing_user = await get_user_by_email(db, user_data.email)
+async def register_user(user_data: UserCreate, db: AsyncSession) -> User:
+    existing_user = await get_user_by_email(user_data.email, db)
     if existing_user:
         raise UserAlreadyExistsError()
-    return await create_user(db, user_data)
+    return await create_user(user_data, db)
