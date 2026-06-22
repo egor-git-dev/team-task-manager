@@ -24,3 +24,10 @@ async def get_user_by_email(user_email: str, db: AsyncSession) -> User | None:
     result = await db.execute(query)
 
     return result.scalar_one_or_none()
+
+
+async def get_user_by_id(user_id: int, db: AsyncSession) -> User | None:
+    query = select(User).where(User.id == user_id)
+    result = await db.execute(query)
+
+    return result.scalar_one_or_none()

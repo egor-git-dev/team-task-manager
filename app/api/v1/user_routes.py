@@ -22,3 +22,14 @@ async def register_user(
             status_code=status.HTTP_409_CONFLICT,
             detail="User already exists",
         )
+
+
+@router.get("/{user_id}", response_model=UserRead, status_code=status.HTTP_200_OK)
+async def get_user_by_id(user_id: int, db: AsyncSession = Depends(get_db)) -> User:
+    try:
+        return await user_services.get_user_by_id_or_raise(user_id, db)
+    except user_services.UserNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
