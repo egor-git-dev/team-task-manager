@@ -8,11 +8,17 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
+    # DATABASE
     postgres_server: str = "localhost"
     postgres_port: int = 5432
     postgres_user: str = "postgres"
     postgres_password: str = "postgres"
     postgres_db: str = "team_task_manager"
+
+    # JWT
+    secret_key: str
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
 
     @property
     def database_url(self) -> str:
