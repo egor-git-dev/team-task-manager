@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db
+from app.api.deps import get_current_user, get_db
 from app.models.users import User
 from app.schemas.users import UserCreate, UserRead
 from app.services import users as user_services
@@ -21,6 +21,11 @@ async def register_user(
             status_code=status.HTTP_409_CONFLICT,
             detail="User already exists",
         )
+
+
+@router.get("/me", response_model=UserRead)
+async def get_me(current_user: User = Depends(get_current_user)) -> User:
+    return current_user
 
 
 @router.get("/{user_id}", response_model=UserRead, status_code=status.HTTP_200_OK)

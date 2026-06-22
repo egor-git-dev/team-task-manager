@@ -2,8 +2,9 @@ from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 
+from app.api.deps import get_current_user
 from app.main import app
-from app.models.users import UserRole
+from app.models.users import User, UserRole
 from app.services import users as user_services
 
 client = TestClient(app)
@@ -86,3 +87,27 @@ def test_get_user_by_id_not_found(monkeypatch):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "User not found"
+
+
+def test_get_me():
+    user = User(
+        id=1,
+        email="test@example.com",
+        is_active=True,
+        role=UserRole.USER,
+        created_at=datetime.now(UTC),
+    )
+
+    async def fake_get_current_user():
+        return user
+
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    response = client.get("/api/v1/users/me")
+    data = response.json()
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert data["id"] == 1
+    assert data["email"] == "test@example.com"
+    assert "password" not in data
+    assert "hashed_password" not in data
