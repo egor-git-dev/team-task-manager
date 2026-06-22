@@ -1,9 +1,9 @@
 from fastapi.testclient import TestClient
 
+from app.core import security
 from app.main import app
 from app.models.users import User
 from app.services import users as user_service
-from app.core import security
 
 client = TestClient(app)
 

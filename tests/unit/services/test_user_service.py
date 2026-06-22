@@ -1,11 +1,12 @@
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.users import User
 from app.schemas.users import UserCreate
 from app.services import users as user_service
-from app.services.users import UserAlreadyExistsError, InvalidCredentialsError
+from app.services.users import InvalidCredentialsError, UserAlreadyExistsError
 
 
 @pytest.mark.asyncio

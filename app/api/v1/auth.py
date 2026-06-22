@@ -7,7 +7,6 @@ from app.core import security
 from app.schemas.token import Token
 from app.services import users as user_services
 
-
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 

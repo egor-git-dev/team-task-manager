@@ -1,7 +1,7 @@
 from jose import jwt
 
-from app.core.security import get_password_hash, verify_password, create_access_token
 from app.core.config import settings
+from app.core.security import create_access_token, get_password_hash, verify_password
 
 
 def test_password_hashing_and_verification():

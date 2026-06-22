@@ -1,9 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import verify_password
 from app.crud.users import create_user, get_user_by_email, get_user_by_id
 from app.models.users import User
 from app.schemas.users import UserCreate
-from app.core.security import verify_password
 
 
 class UserAlreadyExistsError(Exception):
