@@ -2,15 +2,15 @@ from collections.abc import AsyncGenerator
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import jwt, JWTError
+from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import AsyncSessionLocal
-from app.models.users import User
 from app.core.config import settings
 from app.crud.users import get_user_by_id
+from app.db.session import AsyncSessionLocal
+from app.models.users import User
 
-oauth_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -19,7 +19,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def get_current_user(
-    token: str = Depends(oauth_scheme),
+    token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     credential_exception = HTTPException(
