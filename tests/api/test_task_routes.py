@@ -116,3 +116,49 @@ def test_get_task_by_id_not_found(monkeypatch):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Task not found"
+
+
+def test_get_user_tasks(monkeypatch):
+    tasks = [
+        Task(
+            id=1,
+            title="test title",
+            description="test description",
+            status=TaskStatus.OPEN,
+            creator_id=1,
+            assignee_id=2,
+            created_at=datetime.now(UTC),
+        ),
+        Task(
+            id=2,
+            title="test title2",
+            description="test description2",
+            status=TaskStatus.OPEN,
+            creator_id=3,
+            assignee_id=1,
+            created_at=datetime.now(UTC),
+        ),
+    ]
+
+    async def fake_get_current_user():
+        return User(id=1)
+
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    mock_get_user_tasks = AsyncMock(return_value=tasks)
+    monkeypatch.setattr(task_services, "get_user_tasks", mock_get_user_tasks)
+    try:
+        response = client.get("/api/v1/tasks")
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert len(data) == 2
+    assert data[1]["id"] == 2
+    assert data[1]["title"] == "test title2"
+    assert data[1]["description"] == "test description2"
+    mock_get_user_tasks.assert_awaited_once()
+    await_args = mock_get_user_tasks.await_args
+    assert await_args is not None
+    user_id, db = await_args.args
+    assert user_id == 1

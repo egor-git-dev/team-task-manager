@@ -18,3 +18,7 @@ async def get_task_by_id_or_raise(task_id: int, db: AsyncSession) -> Task:
 
 async def create_task(task_data: TaskCreate, creator_id: int, db: AsyncSession) -> Task:
     return await task_crud.create_task(task_data, creator_id, db)
+
+
+async def get_user_tasks(user_id: int, db: AsyncSession) -> list[Task]:
+    return await task_crud.get_user_tasks(user_id, db)

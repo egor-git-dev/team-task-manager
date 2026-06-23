@@ -49,3 +49,20 @@ async def test_get_task_by_id_or_raise_error(monkeypatch):
     with pytest.raises(task_services.TaskNotFoundError):
         await task_services.get_task_by_id_or_raise(task_id, db)
     mock_get_task_by_id.assert_awaited_once_with(task_id, db)
+
+
+@pytest.mark.asyncio
+async def test_get_user_tasks(monkeypatch):
+    tasks = [
+        Task(title="test_title", description="test_description"),
+        Task(title="test_title2", description="test_description2"),
+    ]
+    mock_get_user_tasks = AsyncMock(return_value=tasks)
+    monkeypatch.setattr(task_services.task_crud, "get_user_tasks", mock_get_user_tasks)
+    db = AsyncMock(spec=AsyncSession)
+    user_id = 1
+
+    result = await task_services.get_user_tasks(user_id, db)
+
+    assert result is tasks
+    mock_get_user_tasks.assert_awaited_once_with(user_id, db)

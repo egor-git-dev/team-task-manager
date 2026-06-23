@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tasks import Task
@@ -25,3 +25,13 @@ async def get_task_by_id(task_id: int, db: AsyncSession) -> Task | None:
     result = await db.execute(query)
 
     return result.scalar_one_or_none()
+
+
+async def get_user_tasks(user_id: int, db: AsyncSession) -> list[Task]:
+    query = (
+        select(Task)
+        .where(or_(Task.creator_id == user_id, Task.assignee_id == user_id))
+        .order_by(Task.created_at.desc())
+    )
+    result = await db.execute(query)
+    return list(result.scalars().all())
