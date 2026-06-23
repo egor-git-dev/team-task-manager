@@ -1,11 +1,18 @@
+from __future__ import annotations
+
 from datetime import datetime
 from enum import Enum
+from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, func
+from sqlalchemy import DateTime, ForeignKey, func
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.tasks import Task
+    from app.models.teams import Team
 
 
 class UserRole(str, Enum):
@@ -30,8 +37,20 @@ class User(Base):
         default=UserRole.USER,
         nullable=False,
     )
+    team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
     )
+
+    created_tasks: Mapped[list["Task"]] = relationship(
+        back_populates="creator",
+        foreign_keys="Task.creator_id",
+    )
+
+    assigned_tasks: Mapped[list["Task"]] = relationship(
+        back_populates="assignee",
+        foreign_keys="Task.assignee_id",
+    )
+    team: Mapped["Team | None"] = relationship(back_populates="users")

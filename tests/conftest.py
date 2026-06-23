@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.config import settings
 from app.db.base import Base
-from app.models import tasks, users  # noqa: F401
+from app.models import tasks, teams, users  # noqa: F401
 
 
 @pytest_asyncio.fixture()
