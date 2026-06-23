@@ -69,3 +69,24 @@ async def test_update_task(async_session):
 
     assert task.title == "New title"
     assert task.description == "Old description"
+
+
+@pytest.mark.asyncio
+async def test_delete_task(async_session):
+    user = User(email="egor@mail.com", hashed_password="12345678")
+    async_session.add(user)
+    await async_session.commit()
+    await async_session.refresh(user)
+    task = Task(
+        title="Old title",
+        description="Old description",
+        creator_id=user.id,
+    )
+    async_session.add(task)
+    await async_session.commit()
+    await async_session.refresh(task)
+    task_id = task.id
+
+    await task_crud.delete_task(task, async_session)
+
+    assert await task_crud.get_task_by_id(task_id, async_session) is None

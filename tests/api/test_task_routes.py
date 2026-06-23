@@ -252,3 +252,79 @@ def test_update_task_permission_error(monkeypatch):
     assert task_id == 1
     assert task_data.title == "new title"
     assert current_user.id == 1
+
+
+def test_delete_task_success(monkeypatch):
+    mock_delete_task_or_raise = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        task_services, "delete_task_or_raise", mock_delete_task_or_raise
+    )
+
+    async def fake_get_current_user():
+        return User(id=1)
+
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.delete("/api/v1/tasks/1")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 204
+    mock_delete_task_or_raise.assert_awaited_once()
+    await_args = mock_delete_task_or_raise.await_args
+    assert await_args is not None
+    task_id, current_user, db = await_args.args
+    assert task_id == 1
+    assert current_user.id == 1
+
+
+def test_delete_task_not_found_error(monkeypatch):
+    mock_delete_task_or_raise = AsyncMock(side_effect=task_services.TaskNotFoundError())
+    monkeypatch.setattr(
+        task_services, "delete_task_or_raise", mock_delete_task_or_raise
+    )
+
+    async def fake_get_current_user():
+        return User(id=1)
+
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.delete("/api/v1/tasks/1")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Task not found"
+    mock_delete_task_or_raise.assert_awaited_once()
+    await_args = mock_delete_task_or_raise.await_args
+    assert await_args is not None
+    task_id, current_user, db = await_args.args
+    assert task_id == 1
+    assert current_user.id == 1
+
+
+def test_delete_task_permission_error(monkeypatch):
+    mock_delete_task_or_raise = AsyncMock(
+        side_effect=task_services.TaskPermissionError()
+    )
+    monkeypatch.setattr(
+        task_services, "delete_task_or_raise", mock_delete_task_or_raise
+    )
+
+    async def fake_get_current_user():
+        return User(id=1)
+
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.delete("/api/v1/tasks/1")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Not enough permissions"
+    mock_delete_task_or_raise.assert_awaited_once()
+    await_args = mock_delete_task_or_raise.await_args
+    assert await_args is not None
+    task_id, current_user, db = await_args.args
+    assert task_id == 1
+    assert current_user.id == 1

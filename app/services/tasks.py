@@ -39,3 +39,12 @@ async def update_task_or_raise(
     if current_user.id != task.creator_id:
         raise TaskPermissionError()
     return await task_crud.update_task(task, task_data, db)
+
+
+async def delete_task_or_raise(
+    task_id: int, current_user: User, db: AsyncSession
+) -> None:
+    task = await get_task_by_id_or_raise(task_id, db)
+    if current_user.id != task.creator_id:
+        raise TaskPermissionError()
+    await task_crud.delete_task(task, db)
