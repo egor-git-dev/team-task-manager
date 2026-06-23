@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     postgres_password: str = "postgres"
     postgres_db: str = "team_task_manager"
 
+    # TEST DATABASE
+    test_database_url: str | None = None
+
     # JWT
     secret_key: str
     algorithm: str = "HS256"

@@ -1,0 +1,47 @@
+import pytest
+
+from app.crud import tasks as task_crud
+from app.models.tasks import Task
+from app.models.users import User
+
+
+@pytest.mark.asyncio
+async def test_get_user_tasks(async_session):
+    users = [
+        User(email="egor@mail.com", hashed_password="12345678"),
+        User(email="ivan@mail.com", hashed_password="87654321"),
+    ]
+    async_session.add_all(users)
+    await async_session.commit()
+    for user in users:
+        await async_session.refresh(user)
+
+    tasks = [
+        Task(
+            title="Task 1",
+            description="Description 1",
+            creator_id=users[0].id,
+        ),
+        Task(
+            title="Task 2",
+            description="Description 2",
+            creator_id=users[1].id,
+            assignee_id=users[0].id,
+        ),
+        Task(
+            title="Task 3",
+            description="Description 3",
+            creator_id=users[1].id,
+            assignee_id=users[1].id,
+        ),
+    ]
+    async_session.add_all(tasks)
+    await async_session.commit()
+
+    result = await task_crud.get_user_tasks(users[0].id, async_session)
+    result_titles = {task.title for task in result}
+
+    assert users[0].id is not None
+    assert users[1].id is not None
+    assert result_titles == {"Task 1", "Task 2"}
+    assert len(result) == 2
