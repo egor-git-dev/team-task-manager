@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db
 from app.models.tasks import Task
 from app.models.users import User
-from app.schemas.tasks import TaskCreate, TaskRead
+from app.schemas.tasks import TaskCreate, TaskRead, TaskUpdate
 from app.services import tasks as task_services
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
@@ -38,4 +38,27 @@ async def get_task_by_id(
     except task_services.TaskNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
+        )
+
+
+@router.patch("/{task_id}", response_model=TaskRead)
+async def update_task(
+    task_id: int,
+    task_data: TaskUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Task:
+    try:
+        return await task_services.update_task_or_raise(
+            task_id, task_data, current_user, db
+        )
+    except task_services.TaskNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found",
+        )
+    except task_services.TaskPermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions",
         )

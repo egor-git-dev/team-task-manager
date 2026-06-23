@@ -3,6 +3,7 @@ import pytest
 from app.crud import tasks as task_crud
 from app.models.tasks import Task
 from app.models.users import User
+from app.schemas.tasks import TaskUpdate
 
 
 @pytest.mark.asyncio
@@ -45,3 +46,26 @@ async def test_get_user_tasks(async_session):
     assert users[1].id is not None
     assert result_titles == {"Task 1", "Task 2"}
     assert len(result) == 2
+
+
+@pytest.mark.asyncio
+async def test_update_task(async_session):
+    user = User(email="egor@mail.com", hashed_password="12345678")
+    async_session.add(user)
+    await async_session.commit()
+    await async_session.refresh(user)
+
+    task = Task(
+        title="Old title",
+        description="Old description",
+        creator_id=user.id,
+    )
+    async_session.add(task)
+    await async_session.commit()
+    await async_session.refresh(task)
+
+    task_data = TaskUpdate(title="New title")
+    await task_crud.update_task(task, task_data, async_session)
+
+    assert task.title == "New title"
+    assert task.description == "Old description"

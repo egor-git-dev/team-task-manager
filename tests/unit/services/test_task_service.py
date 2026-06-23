@@ -4,7 +4,8 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tasks import Task
-from app.schemas.tasks import TaskCreate
+from app.models.users import User
+from app.schemas.tasks import TaskCreate, TaskUpdate
 from app.services import tasks as task_services
 
 
@@ -66,3 +67,64 @@ async def test_get_user_tasks(monkeypatch):
 
     assert result is tasks
     mock_get_user_tasks.assert_awaited_once_with(user_id, db)
+
+
+@pytest.mark.asyncio
+async def test_update_task_success(monkeypatch):
+    task = Task(title="old title", description="old description", creator_id=1)
+    mock_get_task_by_id_or_raise = AsyncMock(return_value=task)
+    monkeypatch.setattr(
+        task_services, "get_task_by_id_or_raise", mock_get_task_by_id_or_raise
+    )
+    mock_update_task = AsyncMock(return_value=task)
+    monkeypatch.setattr(task_services.task_crud, "update_task", mock_update_task)
+    task_id = 1
+    task_data = TaskUpdate(title="new title", description="new description")
+    current_user = User(id=1)
+    db = AsyncMock(spec=AsyncSession)
+    result = await task_services.update_task_or_raise(
+        task_id, task_data, current_user, db
+    )
+
+    assert result is task
+    mock_get_task_by_id_or_raise.assert_awaited_once_with(task_id, db)
+    mock_update_task.assert_awaited_once_with(task, task_data, db)
+
+
+@pytest.mark.asyncio
+async def test_update_task_not_found(monkeypatch):
+    mock_get_task_by_id_or_raise = AsyncMock(
+        side_effect=task_services.TaskNotFoundError()
+    )
+    monkeypatch.setattr(
+        task_services, "get_task_by_id_or_raise", mock_get_task_by_id_or_raise
+    )
+    mock_update_task = AsyncMock()
+    monkeypatch.setattr(task_services.task_crud, "update_task", mock_update_task)
+    task_id = 1
+    task_data = TaskUpdate(title="new title", description="new description")
+    current_user = User(id=1)
+    db = AsyncMock(spec=AsyncSession)
+
+    with pytest.raises(task_services.TaskNotFoundError):
+        await task_services.update_task_or_raise(task_id, task_data, current_user, db)
+    mock_update_task.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_task_permission_error(monkeypatch):
+    task = Task(title="old title", description="old description", creator_id=1)
+    mock_get_task_by_id_or_raise = AsyncMock(return_value=task)
+    monkeypatch.setattr(
+        task_services, "get_task_by_id_or_raise", mock_get_task_by_id_or_raise
+    )
+    mock_update_task = AsyncMock()
+    monkeypatch.setattr(task_services.task_crud, "update_task", mock_update_task)
+    task_id = 1
+    task_data = TaskUpdate(title="new title", description="new description")
+    current_user = User(id=2)
+    db = AsyncMock(spec=AsyncSession)
+
+    with pytest.raises(task_services.TaskPermissionError):
+        await task_services.update_task_or_raise(task_id, task_data, current_user, db)
+    mock_update_task.assert_not_awaited()

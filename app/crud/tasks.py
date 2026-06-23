@@ -2,7 +2,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tasks import Task
-from app.schemas.tasks import TaskCreate
+from app.schemas.tasks import TaskCreate, TaskUpdate
 
 
 async def create_task(task_data: TaskCreate, creator_id: int, db: AsyncSession) -> Task:
@@ -35,3 +35,12 @@ async def get_user_tasks(user_id: int, db: AsyncSession) -> list[Task]:
     )
     result = await db.execute(query)
     return list(result.scalars().all())
+
+
+async def update_task(task: Task, task_data: TaskUpdate, db: AsyncSession) -> Task:
+    update_data = task_data.model_dump(exclude_unset=True)
+    for attr, value in update_data.items():
+        setattr(task, attr, value)
+    await db.commit()
+    await db.refresh(task)
+    return task

@@ -162,3 +162,93 @@ def test_get_user_tasks(monkeypatch):
     assert await_args is not None
     user_id, db = await_args.args
     assert user_id == 1
+
+
+def test_update_task_success(monkeypatch):
+    task = Task(
+        id=1,
+        title="new title",
+        description="new description",
+        status=TaskStatus.OPEN,
+        creator_id=1,
+        assignee_id=2,
+        created_at=datetime.now(UTC),
+    )
+    mock_update_task_or_raise = AsyncMock(return_value=task)
+    monkeypatch.setattr(
+        task_services, "update_task_or_raise", mock_update_task_or_raise
+    )
+
+    async def fake_get_current_user():
+        return User(id=1)
+
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.patch("/api/v1/tasks/1", json={"title": "new title"})
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert data["title"] == "new title"
+    mock_update_task_or_raise.assert_awaited_once()
+    await_args = mock_update_task_or_raise.await_args
+    assert await_args is not None
+    task_id, task_data, current_user, db = await_args.args
+    assert task_id == 1
+    assert task_data.title == "new title"
+    assert current_user.id == 1
+
+
+def test_update_task_not_found(monkeypatch):
+    mock_update_task_or_raise = AsyncMock(side_effect=task_services.TaskNotFoundError())
+    monkeypatch.setattr(
+        task_services, "update_task_or_raise", mock_update_task_or_raise
+    )
+
+    async def fake_get_current_user():
+        return User(id=1)
+
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.patch("/api/v1/tasks/1", json={"title": "new title"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Task not found"
+    mock_update_task_or_raise.assert_awaited_once()
+    await_args = mock_update_task_or_raise.await_args
+    assert await_args is not None
+    task_id, task_data, current_user, db = await_args.args
+    assert task_id == 1
+    assert task_data.title == "new title"
+    assert current_user.id == 1
+
+
+def test_update_task_permission_error(monkeypatch):
+    mock_update_task_or_raise = AsyncMock(
+        side_effect=task_services.TaskPermissionError()
+    )
+    monkeypatch.setattr(
+        task_services, "update_task_or_raise", mock_update_task_or_raise
+    )
+
+    async def fake_get_current_user():
+        return User(id=1)
+
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.patch("/api/v1/tasks/1", json={"title": "new title"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Not enough permissions"
+    mock_update_task_or_raise.assert_awaited_once()
+    await_args = mock_update_task_or_raise.await_args
+    assert await_args is not None
+    task_id, task_data, current_user, db = await_args.args
+    assert task_id == 1
+    assert task_data.title == "new title"
+    assert current_user.id == 1
