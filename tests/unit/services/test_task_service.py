@@ -3,7 +3,6 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crud import tasks as task_crud
 from app.models.tasks import Task
 from app.schemas.tasks import TaskCreate
 from app.services import tasks as task_services
