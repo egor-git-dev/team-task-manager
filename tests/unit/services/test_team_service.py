@@ -153,3 +153,46 @@ async def test_join_team_by_code_user_already_in_team(monkeypatch):
         await team_services.join_team_by_code(team_data, current_user, db)
     mock_get_team_by_join_code.assert_awaited_once_with("TEST1234", db)
     mock_update_user_team.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_team_or_raise_success(monkeypatch):
+    team = Team(id=1, name="test team")
+    mock_get_team_with_members = AsyncMock(return_value=team)
+    monkeypatch.setattr(
+        team_services.team_crud, "get_team_with_members", mock_get_team_with_members
+    )
+    current_user = User(team_id=2)
+    db = AsyncMock(spec=AsyncSession)
+    result = await team_services.get_current_user_team_or_raise(current_user, db)
+
+    assert result is team
+    assert result.id == 1
+    assert result.name == "test team"
+    mock_get_team_with_members.assert_awaited_once_with(current_user.team_id, db)
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_team_or_raise_user_not_in_team(monkeypatch):
+    mock_get_team_with_members = AsyncMock()
+    monkeypatch.setattr(
+        team_services.team_crud, "get_team_with_members", mock_get_team_with_members
+    )
+    current_user = User(email="test@example.com", team_id=None)
+    db = AsyncMock(spec=AsyncSession)
+    with pytest.raises(team_services.UserNotInTeamError):
+        await team_services.get_current_user_team_or_raise(current_user, db)
+    mock_get_team_with_members.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_team_or_raise_team_not_found(monkeypatch):
+    mock_get_team_with_members = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        team_services.team_crud, "get_team_with_members", mock_get_team_with_members
+    )
+    current_user = User(email="test@example.com", team_id=2)
+    db = AsyncMock(spec=AsyncSession)
+    with pytest.raises(team_services.TeamNotFoundError):
+        await team_services.get_current_user_team_or_raise(current_user, db)
+    mock_get_team_with_members.assert_awaited_once_with(current_user.team_id, db)

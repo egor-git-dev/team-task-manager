@@ -22,6 +22,10 @@ class UserAlreadyInTeamError(Exception):
     pass
 
 
+class UserNotInTeamError(Exception):
+    pass
+
+
 JOIN_CODE_ALPHABET = string.ascii_uppercase + string.digits
 JOIN_CODE_LENGTH = 8
 JOIN_CODE_GENERATION_ATTEMPTS = 10
@@ -49,3 +53,13 @@ async def join_team_by_code(
     if current_user.team_id is not None:
         raise UserAlreadyInTeamError()
     return await user_crud.update_user_team(current_user, team.id, db)
+
+
+async def get_current_user_team_or_raise(current_user: User, db: AsyncSession) -> Team:
+    if current_user.team_id is None:
+        raise UserNotInTeamError()
+    team = await team_crud.get_team_with_members(current_user.team_id, db)
+    if team is None:
+        raise TeamNotFoundError()
+
+    return team

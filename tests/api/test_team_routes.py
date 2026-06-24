@@ -33,6 +33,7 @@ def test_create_team_by_manager(monkeypatch):
     assert await_args is not None
     team_data, db = await_args.args
     assert team_data.name == "test_team"
+    assert response.json()["join_code"] == "TEST1234"
     mock_create_team.assert_awaited_once()
 
 
@@ -151,3 +152,118 @@ def test_join_team_by_code_user_already_in_team_error(monkeypatch):
     team_data, current_user, db = await_args.args
     assert team_data.join_code == "TEST1234"
     assert current_user.id == 1
+
+
+def test_get_my_team_success(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1)
+
+    team = Team(
+        id=2,
+        name="test team",
+        created_at=datetime.now(UTC),
+        users=[
+            User(
+                id=1,
+                email="1@example.com",
+                is_active=True,
+                role=UserRole.USER,
+                team_id=2,
+                created_at=datetime.now(UTC),
+            ),
+            User(
+                id=2,
+                email="2@example.com",
+                is_active=True,
+                role=UserRole.USER,
+                team_id=2,
+                created_at=datetime.now(UTC),
+            ),
+            User(
+                id=3,
+                email="3@example.com",
+                is_active=True,
+                role=UserRole.USER,
+                team_id=2,
+                created_at=datetime.now(UTC),
+            ),
+        ],
+    )
+    mock_get_current_user_team_or_raise = AsyncMock(return_value=team)
+    monkeypatch.setattr(
+        team_services,
+        "get_current_user_team_or_raise",
+        mock_get_current_user_team_or_raise,
+    )
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.get("/api/v1/teams/me")
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert len(data["users"]) == 3
+    await_args = mock_get_current_user_team_or_raise.await_args
+    assert await_args is not None
+    current_user, db = await_args.args
+    assert current_user.id == 1
+    mock_get_current_user_team_or_raise.assert_awaited_once_with(current_user, db)
+
+
+def test_get_my_team_user_not_in_team(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1)
+
+    mock_get_current_user_team_or_raise = AsyncMock(
+        side_effect=team_services.UserNotInTeamError()
+    )
+
+    monkeypatch.setattr(
+        team_services,
+        "get_current_user_team_or_raise",
+        mock_get_current_user_team_or_raise,
+    )
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.get("/api/v1/teams/me")
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert data["detail"] == "User is not in a team"
+    await_args = mock_get_current_user_team_or_raise.await_args
+    assert await_args is not None
+    current_user, db = await_args.args
+    assert current_user.id == 1
+    mock_get_current_user_team_or_raise.assert_awaited_once()
+
+
+def test_get_my_team_not_found(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1)
+
+    mock_get_current_user_team_or_raise = AsyncMock(
+        side_effect=team_services.TeamNotFoundError()
+    )
+
+    monkeypatch.setattr(
+        team_services,
+        "get_current_user_team_or_raise",
+        mock_get_current_user_team_or_raise,
+    )
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.get("/api/v1/teams/me")
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert data["detail"] == "Team not found"
+    await_args = mock_get_current_user_team_or_raise.await_args
+    assert await_args is not None
+    current_user, db = await_args.args
+    assert current_user.id == 1
+    mock_get_current_user_team_or_raise.assert_awaited_once()
