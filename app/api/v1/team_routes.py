@@ -4,7 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db
 from app.models.teams import Team
 from app.models.users import User, UserRole
-from app.schemas.teams import TeamCreate, TeamRead
+from app.schemas.teams import TeamCreate, TeamJoin, TeamRead
+from app.schemas.users import UserRead
 from app.services import teams as team_services
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
@@ -26,4 +27,24 @@ async def create_team(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Could not generate team join code",
+        )
+
+
+@router.post("/join", response_model=UserRead, status_code=status.HTTP_200_OK)
+async def join_team_by_code(
+    team_data: TeamJoin,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    try:
+        return await team_services.join_team_by_code(team_data, current_user, db)
+    except team_services.TeamNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Team not found",
+        )
+    except team_services.UserAlreadyInTeamError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User already in team",
         )

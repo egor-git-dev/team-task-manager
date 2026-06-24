@@ -18,6 +18,7 @@ def test_register_user_success(monkeypatch):
             "is_active": True,
             "role": UserRole.USER,
             "created_at": datetime.now(UTC),
+            "team_id": None,
         }
 
     monkeypatch.setattr(user_services, "register_user", fake_register_user)
@@ -57,6 +58,7 @@ def test_get_user_by_id(monkeypatch):
             "is_active": True,
             "role": UserRole.USER,
             "created_at": datetime.now(UTC),
+            "team_id": None,
         }
 
     monkeypatch.setattr(

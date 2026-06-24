@@ -75,3 +75,79 @@ def test_create_team_join_code_generation_error(monkeypatch):
     team_data, db = await_args.args
     assert team_data.name == "test_team"
     mock_create_team.assert_awaited_once()
+
+
+def test_join_team_by_code_success(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1)
+
+    updated_user = User(
+        id=1,
+        email="test@example.com",
+        is_active=True,
+        role=UserRole.USER,
+        team_id=2,
+        created_at=datetime.now(UTC),
+    )
+    mock_join_team_by_code = AsyncMock(return_value=updated_user)
+    monkeypatch.setattr(team_services, "join_team_by_code", mock_join_team_by_code)
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.post("/api/v1/teams/join", json={"join_code": "TEST1234"})
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert data["id"] == 1
+    assert data["email"] == "test@example.com"
+    mock_join_team_by_code.assert_awaited_once()
+    await_args = mock_join_team_by_code.await_args
+    assert await_args is not None
+    team_data, current_user, db = await_args.args
+    assert team_data.join_code == "TEST1234"
+    assert current_user.id == 1
+
+
+def test_join_team_by_code_team_not_found_error(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1)
+
+    mock_join_team_by_code = AsyncMock(side_effect=team_services.TeamNotFoundError())
+    monkeypatch.setattr(team_services, "join_team_by_code", mock_join_team_by_code)
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.post("/api/v1/teams/join", json={"join_code": "TEST1234"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Team not found"
+    await_args = mock_join_team_by_code.await_args
+    assert await_args is not None
+    team_data, current_user, db = await_args.args
+    assert team_data.join_code == "TEST1234"
+    assert current_user.id == 1
+
+
+def test_join_team_by_code_user_already_in_team_error(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1)
+
+    mock_join_team_by_code = AsyncMock(
+        side_effect=team_services.UserAlreadyInTeamError()
+    )
+    monkeypatch.setattr(team_services, "join_team_by_code", mock_join_team_by_code)
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.post("/api/v1/teams/join", json={"join_code": "TEST1234"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "User already in team"
+    await_args = mock_join_team_by_code.await_args
+    assert await_args is not None
+    team_data, current_user, db = await_args.args
+    assert team_data.join_code == "TEST1234"
+    assert current_user.id == 1

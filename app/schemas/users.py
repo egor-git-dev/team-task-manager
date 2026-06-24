@@ -20,3 +20,4 @@ class UserRead(UserBase):
     is_active: bool
     role: UserRole
     created_at: datetime
+    team_id: int | None

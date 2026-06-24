@@ -4,7 +4,8 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.teams import Team
-from app.schemas.teams import TeamCreate
+from app.models.users import User
+from app.schemas.teams import TeamCreate, TeamJoin
 from app.services import teams as team_services
 
 
@@ -88,3 +89,67 @@ async def test_create_team_generate_code_error(monkeypatch):
         mock_get_team_by_join_code.await_count
         == team_services.JOIN_CODE_GENERATION_ATTEMPTS
     )
+
+
+@pytest.mark.asyncio
+async def test_join_team_by_code_success(monkeypatch):
+    team = Team(id=1, name="test team")
+    mock_get_team_by_join_code = AsyncMock(return_value=team)
+    monkeypatch.setattr(
+        team_services.team_crud, "get_team_by_join_code", mock_get_team_by_join_code
+    )
+    updated_user = User(id=1, team_id=1)
+    mock_update_user_team = AsyncMock(return_value=updated_user)
+    monkeypatch.setattr(
+        team_services.user_crud, "update_user_team", mock_update_user_team
+    )
+    team_data = TeamJoin(join_code="TEST1234")
+    current_user = User()
+    db = AsyncMock(spec=AsyncSession)
+    result = await team_services.join_team_by_code(team_data, current_user, db)
+
+    assert result is updated_user
+    assert result.team_id == 1
+    mock_update_user_team.assert_awaited_once_with(current_user, team.id, db)
+    mock_get_team_by_join_code.assert_awaited_once_with("TEST1234", db)
+
+
+@pytest.mark.asyncio
+async def test_join_team_by_code_team_not_found(monkeypatch):
+    mock_get_team_by_join_code = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        team_services.team_crud, "get_team_by_join_code", mock_get_team_by_join_code
+    )
+    mock_update_user_team = AsyncMock()
+    monkeypatch.setattr(
+        team_services.user_crud, "update_user_team", mock_update_user_team
+    )
+    team_data = TeamJoin(join_code="TEST1234")
+    current_user = User()
+    db = AsyncMock(spec=AsyncSession)
+
+    with pytest.raises(team_services.TeamNotFoundError):
+        await team_services.join_team_by_code(team_data, current_user, db)
+    mock_get_team_by_join_code.assert_awaited_once_with("TEST1234", db)
+    mock_update_user_team.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_join_team_by_code_user_already_in_team(monkeypatch):
+    team = Team(id=1, name="test team")
+    mock_get_team_by_join_code = AsyncMock(return_value=team)
+    monkeypatch.setattr(
+        team_services.team_crud, "get_team_by_join_code", mock_get_team_by_join_code
+    )
+    mock_update_user_team = AsyncMock()
+    monkeypatch.setattr(
+        team_services.user_crud, "update_user_team", mock_update_user_team
+    )
+    team_data = TeamJoin(join_code="TEST1234")
+    current_user = User(team_id=2)
+    db = AsyncMock(spec=AsyncSession)
+
+    with pytest.raises(team_services.UserAlreadyInTeamError):
+        await team_services.join_team_by_code(team_data, current_user, db)
+    mock_get_team_by_join_code.assert_awaited_once_with("TEST1234", db)
+    mock_update_user_team.assert_not_awaited()
