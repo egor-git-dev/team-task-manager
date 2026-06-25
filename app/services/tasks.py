@@ -101,6 +101,14 @@ async def delete_task_or_raise(
     task_id: int, current_user: User, db: AsyncSession
 ) -> None:
     task = await get_task_by_id_or_raise(task_id, db)
-    if current_user.id != task.creator_id:
+    if current_user.team_id != task.team_id:
+        raise TaskNotFoundError()
+    if current_user.id == task.creator_id:
+        await task_crud.delete_task(task, db)
+        return
+    if current_user.role in {UserRole.MANAGER, UserRole.ADMIN}:
+        await task_crud.delete_task(task, db)
+        return
+    if current_user.id == task.assignee_id:
         raise TaskPermissionError()
-    await task_crud.delete_task(task, db)
+    raise TaskNotFoundError()

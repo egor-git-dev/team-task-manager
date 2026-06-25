@@ -262,8 +262,8 @@ async def test_update_task_permission_error(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_delete_task_success(monkeypatch):
-    task = Task(title="test title", description="test description", creator_id=1)
+async def test_delete_task_by_creator_success(monkeypatch):
+    task = Task(title="test title", creator_id=1, team_id=3)
     mock_get_task_by_id_or_raise = AsyncMock(return_value=task)
     monkeypatch.setattr(
         task_services, "get_task_by_id_or_raise", mock_get_task_by_id_or_raise
@@ -271,7 +271,7 @@ async def test_delete_task_success(monkeypatch):
     mock_delete_task = AsyncMock(return_value=None)
     monkeypatch.setattr(task_services.task_crud, "delete_task", mock_delete_task)
     task_id = 1
-    current_user = User(id=1)
+    current_user = User(id=1, team_id=3, role=UserRole.USER)
     db = AsyncMock(spec=AsyncSession)
     result = await task_services.delete_task_or_raise(task_id, current_user, db)
 
@@ -301,8 +301,8 @@ async def test_delete_task_not_found_error(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_delete_task_permission_error(monkeypatch):
-    task = Task(creator_id=2)
+async def test_delete_task_by_assignee_permission_error(monkeypatch):
+    task = Task(creator_id=2, assignee_id=1, team_id=3)
     mock_get_task_by_id_or_raise = AsyncMock(return_value=task)
     monkeypatch.setattr(
         task_services, "get_task_by_id_or_raise", mock_get_task_by_id_or_raise
@@ -310,13 +310,70 @@ async def test_delete_task_permission_error(monkeypatch):
     mock_delete_task = AsyncMock(return_value=None)
     monkeypatch.setattr(task_services.task_crud, "delete_task", mock_delete_task)
     task_id = 1
-    current_user = User(id=1)
+    current_user = User(id=1, team_id=3, role=UserRole.USER)
     db = AsyncMock(spec=AsyncSession)
 
     with pytest.raises(task_services.TaskPermissionError):
         await task_services.delete_task_or_raise(task_id, current_user, db)
     mock_get_task_by_id_or_raise.assert_awaited_once_with(task_id, db)
     mock_delete_task.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_delete_task_by_other_team_user_not_found(monkeypatch):
+    task = Task(creator_id=2, assignee_id=1, team_id=3)
+    mock_get_task_by_id_or_raise = AsyncMock(return_value=task)
+    monkeypatch.setattr(
+        task_services, "get_task_by_id_or_raise", mock_get_task_by_id_or_raise
+    )
+    mock_delete_task = AsyncMock(return_value=None)
+    monkeypatch.setattr(task_services.task_crud, "delete_task", mock_delete_task)
+    task_id = 1
+    current_user = User(id=1, team_id=5, role=UserRole.USER)
+    db = AsyncMock(spec=AsyncSession)
+
+    with pytest.raises(task_services.TaskNotFoundError):
+        await task_services.delete_task_or_raise(task_id, current_user, db)
+    mock_get_task_by_id_or_raise.assert_awaited_once_with(task_id, db)
+    mock_delete_task.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_delete_task_by_unrelated_team_user_not_found(monkeypatch):
+    task = Task(creator_id=2, team_id=3, assignee_id=7)
+    mock_get_task_by_id_or_raise = AsyncMock(return_value=task)
+    monkeypatch.setattr(
+        task_services, "get_task_by_id_or_raise", mock_get_task_by_id_or_raise
+    )
+    mock_delete_task = AsyncMock(return_value=None)
+    monkeypatch.setattr(task_services.task_crud, "delete_task", mock_delete_task)
+    task_id = 1
+    current_user = User(id=1, team_id=3, role=UserRole.USER)
+    db = AsyncMock(spec=AsyncSession)
+
+    with pytest.raises(task_services.TaskNotFoundError):
+        await task_services.delete_task_or_raise(task_id, current_user, db)
+    mock_get_task_by_id_or_raise.assert_awaited_once_with(task_id, db)
+    mock_delete_task.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_delete_task_by_manager_success(monkeypatch):
+    task = Task(title="test title", creator_id=1, team_id=3)
+    mock_get_task_by_id_or_raise = AsyncMock(return_value=task)
+    monkeypatch.setattr(
+        task_services, "get_task_by_id_or_raise", mock_get_task_by_id_or_raise
+    )
+    mock_delete_task = AsyncMock(return_value=None)
+    monkeypatch.setattr(task_services.task_crud, "delete_task", mock_delete_task)
+    task_id = 1
+    current_user = User(id=2, team_id=3, role=UserRole.MANAGER)
+    db = AsyncMock(spec=AsyncSession)
+    result = await task_services.delete_task_or_raise(task_id, current_user, db)
+
+    assert result is None
+    mock_get_task_by_id_or_raise.assert_awaited_once_with(task_id, db)
+    mock_delete_task.assert_awaited_once_with(task, db)
 
 
 @pytest.mark.asyncio
