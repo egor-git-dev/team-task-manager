@@ -50,6 +50,14 @@ async def get_task_by_id_for_user_or_raise(
     raise TaskNotFoundError()
 
 
+async def get_tasks_for_user(current_user: User, db: AsyncSession) -> list[Task]:
+    if current_user.role in {UserRole.MANAGER, UserRole.ADMIN}:
+        if current_user.team_id is not None:
+            return await task_crud.get_team_tasks(current_user.team_id, db)
+        return []
+    return await task_crud.get_user_tasks(current_user.id, db)
+
+
 async def create_task(
     task_data: TaskCreate,
     current_user: User,

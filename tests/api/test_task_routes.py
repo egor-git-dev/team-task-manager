@@ -286,8 +286,8 @@ def test_get_user_tasks(monkeypatch):
         return User(id=1)
 
     app.dependency_overrides[get_current_user] = fake_get_current_user
-    mock_get_user_tasks = AsyncMock(return_value=tasks)
-    monkeypatch.setattr(task_services, "get_user_tasks", mock_get_user_tasks)
+    mock_get_tasks_for_user = AsyncMock(return_value=tasks)
+    monkeypatch.setattr(task_services, "get_tasks_for_user", mock_get_tasks_for_user)
     try:
         response = client.get("/api/v1/tasks")
         data = response.json()
@@ -299,11 +299,11 @@ def test_get_user_tasks(monkeypatch):
     assert data[1]["id"] == 2
     assert data[1]["title"] == "test title2"
     assert data[1]["description"] == "test description2"
-    mock_get_user_tasks.assert_awaited_once()
-    await_args = mock_get_user_tasks.await_args
+    mock_get_tasks_for_user.assert_awaited_once()
+    await_args = mock_get_tasks_for_user.await_args
     assert await_args is not None
-    user_id, db = await_args.args
-    assert user_id == 1
+    current_user, db = await_args.args
+    assert current_user.id == 1
 
 
 def test_update_task_success(monkeypatch):

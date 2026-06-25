@@ -41,11 +41,11 @@ async def create_task(
 
 
 @router.get("", response_model=list[TaskRead], status_code=status.HTTP_200_OK)
-async def get_user_tasks(
+async def get_my_tasks(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[Task]:
-    return await task_services.get_user_tasks(current_user.id, db)
+    return await task_services.get_tasks_for_user(current_user, db)
 
 
 @router.get("/{task_id}", response_model=TaskRead, status_code=status.HTTP_200_OK)

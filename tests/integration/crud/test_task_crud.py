@@ -56,6 +56,48 @@ async def test_get_user_tasks(async_session):
 
 
 @pytest.mark.asyncio
+async def test_get_team_tasks(async_session):
+    team_1 = Team(name="test team", join_code="TEST1234", created_at=datetime.now(UTC))
+    team_2 = Team(name="test team2", join_code="TEST4321", created_at=datetime.now(UTC))
+    users = [
+        User(email="egor@mail.com", hashed_password="12345678", team=team_1),
+        User(email="ivan@mail.com", hashed_password="87654321", team=team_2),
+    ]
+    async_session.add_all([team_1, team_2, *users])
+    await async_session.commit()
+    for user in users:
+        await async_session.refresh(user)
+
+    tasks = [
+        Task(
+            title="Task 1",
+            description="Description 1",
+            creator_id=users[0].id,
+            team_id=team_1.id,
+        ),
+        Task(
+            title="Task 2",
+            description="Description 2",
+            creator_id=users[1].id,
+            team_id=team_2.id,
+        ),
+        Task(
+            title="Task 3",
+            description="Description 3",
+            creator_id=users[1].id,
+            team_id=team_1.id,
+        ),
+    ]
+    async_session.add_all(tasks)
+    await async_session.commit()
+
+    result = await task_crud.get_team_tasks(team_1.id, async_session)
+    result_titles = {task.title for task in result}
+
+    assert result_titles == {"Task 1", "Task 3"}
+
+
+@pytest.mark.asyncio
 async def test_update_task(async_session):
     team = Team(name="test team", join_code="TEST1234", created_at=datetime.now(UTC))
     user = User(email="egor@mail.com", hashed_password="12345678", team=team)

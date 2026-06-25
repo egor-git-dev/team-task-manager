@@ -40,6 +40,13 @@ async def get_user_tasks(user_id: int, db: AsyncSession) -> list[Task]:
     return list(result.scalars().all())
 
 
+async def get_team_tasks(team_id: int, db: AsyncSession) -> list[Task]:
+    query = select(Task).where(Task.team_id == team_id).order_by(Task.created_at.desc())
+    result = await db.execute(query)
+
+    return list(result.scalars().all())
+
+
 async def update_task(task: Task, task_data: TaskUpdate, db: AsyncSession) -> Task:
     update_data = task_data.model_dump(exclude_unset=True)
     for attr, value in update_data.items():

@@ -459,3 +459,63 @@ async def test_get_task_by_id_for_user_or_raise_task_not_found(monkeypatch):
         )
 
     mock_get_task_by_id.assert_awaited_once_with(task_id, db)
+
+
+@pytest.mark.asyncio
+async def test_get_tasks_for_user_manager_with_team(monkeypatch):
+    tasks = [
+        Task(title="test_title", description="test_description"),
+        Task(title="test_title2", description="test_description2"),
+    ]
+    mock_get_user_tasks = AsyncMock()
+    monkeypatch.setattr(task_services.task_crud, "get_user_tasks", mock_get_user_tasks)
+    mock_get_team_tasks = AsyncMock(return_value=tasks)
+    monkeypatch.setattr(task_services.task_crud, "get_team_tasks", mock_get_team_tasks)
+    db = AsyncMock(spec=AsyncSession)
+    current_user = User(team_id=2, role=UserRole.MANAGER)
+
+    result = await task_services.get_tasks_for_user(current_user, db)
+
+    assert result is tasks
+    mock_get_team_tasks.assert_awaited_once_with(current_user.team_id, db)
+    mock_get_user_tasks.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_tasks_for_user_admin_without_team(monkeypatch):
+    tasks = [
+        Task(title="test_title", description="test_description"),
+        Task(title="test_title2", description="test_description2"),
+    ]
+    mock_get_user_tasks = AsyncMock()
+    monkeypatch.setattr(task_services.task_crud, "get_user_tasks", mock_get_user_tasks)
+    mock_get_team_tasks = AsyncMock(return_value=tasks)
+    monkeypatch.setattr(task_services.task_crud, "get_team_tasks", mock_get_team_tasks)
+    db = AsyncMock(spec=AsyncSession)
+    current_user = User(role=UserRole.ADMIN)
+
+    result = await task_services.get_tasks_for_user(current_user, db)
+
+    assert result == []
+    mock_get_user_tasks.assert_not_awaited()
+    mock_get_team_tasks.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_tasks_for_user_regular_user_with_team(monkeypatch):
+    tasks = [
+        Task(title="test_title", description="test_description"),
+        Task(title="test_title2", description="test_description2"),
+    ]
+    mock_get_user_tasks = AsyncMock(return_value=tasks)
+    monkeypatch.setattr(task_services.task_crud, "get_user_tasks", mock_get_user_tasks)
+    mock_get_team_tasks = AsyncMock()
+    monkeypatch.setattr(task_services.task_crud, "get_team_tasks", mock_get_team_tasks)
+    db = AsyncMock(spec=AsyncSession)
+    current_user = User(id=1, team_id=2, role=UserRole.USER)
+
+    result = await task_services.get_tasks_for_user(current_user, db)
+
+    assert result is tasks
+    mock_get_user_tasks.assert_awaited_once_with(current_user.id, db)
+    mock_get_team_tasks.assert_not_awaited()
