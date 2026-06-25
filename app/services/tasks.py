@@ -92,9 +92,19 @@ async def update_task_or_raise(
     db: AsyncSession,
 ) -> Task:
     task = await get_task_by_id_or_raise(task_id, db)
-    if current_user.id != task.creator_id:
+    update_data = task_data.model_dump(exclude_unset=True)
+    update_fields = set(update_data)
+    if current_user.team_id != task.team_id:
+        raise TaskNotFoundError()
+    if current_user.id == task.creator_id:
+        return await task_crud.update_task(task, task_data, db)
+    if current_user.role in {UserRole.MANAGER, UserRole.ADMIN}:
+        return await task_crud.update_task(task, task_data, db)
+    if current_user.id == task.assignee_id:
+        if update_fields <= {"status"}:
+            return await task_crud.update_task(task, task_data, db)
         raise TaskPermissionError()
-    return await task_crud.update_task(task, task_data, db)
+    raise TaskNotFoundError()
 
 
 async def delete_task_or_raise(
