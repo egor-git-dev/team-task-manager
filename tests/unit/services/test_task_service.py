@@ -4,27 +4,155 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tasks import Task
-from app.models.users import User
+from app.models.users import User, UserRole
 from app.schemas.tasks import TaskCreate, TaskUpdate
 from app.services import tasks as task_services
 
 
 @pytest.mark.asyncio
-async def test_create_task(monkeypatch):
+async def test_create_task_without_assignee_by_manager(monkeypatch):
     task = Task(title="test_title", description="test_description")
     mock_create_task = AsyncMock(return_value=task)
     monkeypatch.setattr(task_services.task_crud, "create_task", mock_create_task)
+    mock_get_user_by_id = AsyncMock(return_value=None)
+    monkeypatch.setattr(task_services.user_crud, "get_user_by_id", mock_get_user_by_id)
     db = AsyncMock(spec=AsyncSession)
     task_data = TaskCreate(
         title="test_title",
         description="test_description",
     )
-    creator_id = 1
+    user = User(id=1, role=UserRole.MANAGER, team_id=2)
 
-    result = await task_services.create_task(task_data, creator_id, db)
+    result = await task_services.create_task(task_data, user, db)
 
     assert result is task
-    mock_create_task.assert_awaited_once_with(task_data, creator_id, db)
+    mock_create_task.assert_awaited_once_with(task_data, user.id, db)
+    mock_get_user_by_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_task_without_assignee_by_admin(monkeypatch):
+    task = Task(title="test_title", description="test_description")
+    mock_create_task = AsyncMock(return_value=task)
+    monkeypatch.setattr(task_services.task_crud, "create_task", mock_create_task)
+    mock_get_user_by_id = AsyncMock(return_value=None)
+    monkeypatch.setattr(task_services.user_crud, "get_user_by_id", mock_get_user_by_id)
+    db = AsyncMock(spec=AsyncSession)
+    task_data = TaskCreate(
+        title="test_title",
+        description="test_description",
+    )
+    user = User(id=1, role=UserRole.ADMIN, team_id=2)
+
+    result = await task_services.create_task(task_data, user, db)
+
+    assert result is task
+    mock_create_task.assert_awaited_once_with(task_data, user.id, db)
+    mock_get_user_by_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_task_with_same_team_assignee(monkeypatch):
+    task = Task(title="test_title", description="test_description")
+    mock_create_task = AsyncMock(return_value=task)
+    monkeypatch.setattr(task_services.task_crud, "create_task", mock_create_task)
+    assignee = User(team_id=2)
+    mock_get_user_by_id = AsyncMock(return_value=assignee)
+    monkeypatch.setattr(task_services.user_crud, "get_user_by_id", mock_get_user_by_id)
+    db = AsyncMock(spec=AsyncSession)
+    task_data = TaskCreate(
+        title="test_title",
+        description="test_description",
+        assignee_id=2,
+    )
+    user = User(id=1, role=UserRole.MANAGER, team_id=2)
+
+    result = await task_services.create_task(task_data, user, db)
+
+    assert result is task
+    mock_create_task.assert_awaited_once_with(task_data, user.id, db)
+    mock_get_user_by_id.assert_awaited_once_with(2, db)
+
+
+@pytest.mark.asyncio
+async def test_create_task_by_user_error(monkeypatch):
+    mock_create_task = AsyncMock()
+    monkeypatch.setattr(task_services.task_crud, "create_task", mock_create_task)
+    mock_get_user_by_id = AsyncMock()
+    monkeypatch.setattr(task_services.user_crud, "get_user_by_id", mock_get_user_by_id)
+    db = AsyncMock(spec=AsyncSession)
+    task_data = TaskCreate(
+        title="test_title",
+        description="test_description",
+        assignee_id=2,
+    )
+    user = User(id=1, role=UserRole.USER, team_id=2)
+
+    with pytest.raises(task_services.TaskPermissionError):
+        await task_services.create_task(task_data, user, db)
+    mock_get_user_by_id.assert_not_awaited()
+    mock_create_task.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_task_by_manager_not_in_team(monkeypatch):
+    mock_create_task = AsyncMock()
+    monkeypatch.setattr(task_services.task_crud, "create_task", mock_create_task)
+    mock_get_user_by_id = AsyncMock()
+    monkeypatch.setattr(task_services.user_crud, "get_user_by_id", mock_get_user_by_id)
+    db = AsyncMock(spec=AsyncSession)
+    task_data = TaskCreate(
+        title="test_title",
+        description="test_description",
+        assignee_id=2,
+    )
+    user = User(id=1, role=UserRole.MANAGER)
+
+    with pytest.raises(task_services.UserNotInTeamError):
+        await task_services.create_task(task_data, user, db)
+    mock_get_user_by_id.assert_not_awaited()
+    mock_create_task.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_task_assignee_not_found_error(monkeypatch):
+    mock_create_task = AsyncMock()
+    monkeypatch.setattr(task_services.task_crud, "create_task", mock_create_task)
+    mock_get_user_by_id = AsyncMock(return_value=None)
+    monkeypatch.setattr(task_services.user_crud, "get_user_by_id", mock_get_user_by_id)
+    db = AsyncMock(spec=AsyncSession)
+    task_data = TaskCreate(
+        title="test_title",
+        description="test_description",
+        assignee_id=2,
+    )
+    user = User(id=1, role=UserRole.MANAGER, team_id=2)
+
+    with pytest.raises(task_services.TaskAssigneeNotFoundError):
+        await task_services.create_task(task_data, user, db)
+    mock_get_user_by_id.assert_awaited_once_with(task_data.assignee_id, db)
+    mock_create_task.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_task_assignee_from_another_team(monkeypatch):
+    mock_create_task = AsyncMock()
+    monkeypatch.setattr(task_services.task_crud, "create_task", mock_create_task)
+    assignee = User(team_id=3)
+    mock_get_user_by_id = AsyncMock(return_value=assignee)
+    monkeypatch.setattr(task_services.user_crud, "get_user_by_id", mock_get_user_by_id)
+    db = AsyncMock(spec=AsyncSession)
+    task_data = TaskCreate(
+        title="test_title",
+        description="test_description",
+        assignee_id=2,
+    )
+    user = User(id=1, role=UserRole.MANAGER, team_id=2)
+
+    with pytest.raises(task_services.TaskAssigneeTeamMismatchError):
+        await task_services.create_task(task_data, user, db)
+    mock_get_user_by_id.assert_awaited_once_with(task_data.assignee_id, db)
+    mock_create_task.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -12,7 +12,7 @@ from app.services import tasks as task_services
 client = TestClient(app)
 
 
-def test_create_task(monkeypatch):
+def test_create_task_success(monkeypatch):
     task = Task(
         id=1,
         title="test title",
@@ -49,10 +49,145 @@ def test_create_task(monkeypatch):
     assert data["description"] == "test description"
     assert data["creator_id"] == 1
     mock_create_task.assert_awaited_once()
+
     await_args = mock_create_task.await_args
     assert await_args is not None
-    task_data, creator_id, db = await_args.args
-    assert creator_id == 1
+    task_data, current_user, db = await_args.args
+    assert current_user.id == 1
+    assert task_data.title == "test title"
+    assert task_data.assignee_id == 2
+
+
+def test_create_task_permission_error(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1)
+
+    mock_create_task = AsyncMock(side_effect=task_services.TaskPermissionError())
+
+    monkeypatch.setattr(task_services, "create_task", mock_create_task)
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.post(
+            "/api/v1/tasks",
+            json={
+                "title": "test title",
+                "description": "test description",
+                "assignee_id": 2,
+            },
+        )
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert data["detail"] == "Not enough permissions"
+    mock_create_task.assert_awaited_once()
+
+    await_args = mock_create_task.await_args
+    assert await_args is not None
+    task_data, current_user, db = await_args.args
+    assert current_user.id == 1
+    assert task_data.title == "test title"
+    assert task_data.assignee_id == 2
+
+
+def test_create_task_user_not_in_team_error(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1)
+
+    mock_create_task = AsyncMock(side_effect=task_services.UserNotInTeamError())
+
+    monkeypatch.setattr(task_services, "create_task", mock_create_task)
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.post(
+            "/api/v1/tasks",
+            json={
+                "title": "test title",
+                "description": "test description",
+                "assignee_id": 2,
+            },
+        )
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert data["detail"] == "User is not in a team"
+    mock_create_task.assert_awaited_once()
+
+    await_args = mock_create_task.await_args
+    assert await_args is not None
+    task_data, current_user, db = await_args.args
+    assert current_user.id == 1
+    assert task_data.title == "test title"
+    assert task_data.assignee_id == 2
+
+
+def test_create_task_assignee_not_found_error(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1)
+
+    mock_create_task = AsyncMock(side_effect=task_services.TaskAssigneeNotFoundError())
+
+    monkeypatch.setattr(task_services, "create_task", mock_create_task)
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.post(
+            "/api/v1/tasks",
+            json={
+                "title": "test title",
+                "description": "test description",
+                "assignee_id": 2,
+            },
+        )
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert data["detail"] == "User not found"
+    mock_create_task.assert_awaited_once()
+
+    await_args = mock_create_task.await_args
+    assert await_args is not None
+    task_data, current_user, db = await_args.args
+    assert current_user.id == 1
+    assert task_data.title == "test title"
+    assert task_data.assignee_id == 2
+
+
+def test_create_task_team_mismatch_error(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1)
+
+    mock_create_task = AsyncMock(
+        side_effect=task_services.TaskAssigneeTeamMismatchError()
+    )
+
+    monkeypatch.setattr(task_services, "create_task", mock_create_task)
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.post(
+            "/api/v1/tasks",
+            json={
+                "title": "test title",
+                "description": "test description",
+                "assignee_id": 2,
+            },
+        )
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert data["detail"] == "Creator and assignee must be in one team"
+    mock_create_task.assert_awaited_once()
+
+    await_args = mock_create_task.await_args
+    assert await_args is not None
+    task_data, current_user, db = await_args.args
+    assert current_user.id == 1
     assert task_data.title == "test title"
     assert task_data.assignee_id == 2
 

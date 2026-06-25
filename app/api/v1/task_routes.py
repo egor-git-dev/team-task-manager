@@ -16,7 +16,28 @@ async def create_task(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Task:
-    return await task_services.create_task(task_data, current_user.id, db)
+    try:
+        return await task_services.create_task(task_data, current_user, db)
+    except task_services.TaskPermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions",
+        )
+    except task_services.UserNotInTeamError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User is not in a team",
+        )
+    except task_services.TaskAssigneeNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    except task_services.TaskAssigneeTeamMismatchError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Creator and assignee must be in one team",
+        )
 
 
 @router.get("", response_model=list[TaskRead], status_code=status.HTTP_200_OK)
