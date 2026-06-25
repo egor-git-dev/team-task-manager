@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.models.teams import Team
     from app.models.users import User
 
 
@@ -51,6 +52,11 @@ class Task(Base):
         server_default=func.now(),
         nullable=False,
     )
+    team_id: Mapped[int] = mapped_column(
+        ForeignKey("teams.id"),
+        nullable=False,
+        index=True,
+    )
     creator: Mapped["User"] = relationship(
         back_populates="created_tasks",
         foreign_keys=[creator_id],
@@ -58,4 +64,8 @@ class Task(Base):
     assignee: Mapped["User | None"] = relationship(
         back_populates="assigned_tasks",
         foreign_keys=[assignee_id],
+    )
+    team: Mapped["Team"] = relationship(
+        back_populates="tasks",
+        foreign_keys=[team_id],
     )

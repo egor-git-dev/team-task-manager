@@ -21,6 +21,7 @@ def test_create_task_success(monkeypatch):
         creator_id=1,
         assignee_id=2,
         created_at=datetime.now(UTC),
+        team_id=2,
     )
 
     async def fake_get_current_user():
@@ -201,16 +202,17 @@ def test_get_task_by_id_success(monkeypatch):
         creator_id=1,
         assignee_id=2,
         created_at=datetime.now(UTC),
+        team_id=2,
     )
 
     async def fake_get_current_user():
         return User(id=1)
 
-    mock_get_task_by_id_or_raise = AsyncMock(return_value=task)
+    mock_get_task_by_id_for_user_or_raise = AsyncMock(return_value=task)
     monkeypatch.setattr(
         task_services,
-        "get_task_by_id_or_raise",
-        mock_get_task_by_id_or_raise,
+        "get_task_by_id_for_user_or_raise",
+        mock_get_task_by_id_for_user_or_raise,
     )
     app.dependency_overrides[get_current_user] = fake_get_current_user
     try:
@@ -225,19 +227,22 @@ def test_get_task_by_id_success(monkeypatch):
     assert data["description"] == "test description"
     assert data["status"] == "open"
     assert data["creator_id"] == 1
-    mock_get_task_by_id_or_raise.assert_awaited_once()
-    await_args = mock_get_task_by_id_or_raise.await_args
+    mock_get_task_by_id_for_user_or_raise.assert_awaited_once()
+    await_args = mock_get_task_by_id_for_user_or_raise.await_args
     assert await_args is not None
-    task_id, db = await_args.args
+    task_id, current_user, db = await_args.args
     assert task_id == 1
+    assert current_user.id == 1
 
 
 def test_get_task_by_id_not_found(monkeypatch):
-    mock_get_task_by_id_or_raise = AsyncMock(
+    mock_get_task_by_id_for_user_or_raise = AsyncMock(
         side_effect=task_services.TaskNotFoundError()
     )
     monkeypatch.setattr(
-        task_services, "get_task_by_id_or_raise", mock_get_task_by_id_or_raise
+        task_services,
+        "get_task_by_id_for_user_or_raise",
+        mock_get_task_by_id_for_user_or_raise,
     )
 
     async def fake_get_current_user():
@@ -263,6 +268,7 @@ def test_get_user_tasks(monkeypatch):
             creator_id=1,
             assignee_id=2,
             created_at=datetime.now(UTC),
+            team_id=2,
         ),
         Task(
             id=2,
@@ -272,6 +278,7 @@ def test_get_user_tasks(monkeypatch):
             creator_id=3,
             assignee_id=1,
             created_at=datetime.now(UTC),
+            team_id=2,
         ),
     ]
 
@@ -308,6 +315,7 @@ def test_update_task_success(monkeypatch):
         creator_id=1,
         assignee_id=2,
         created_at=datetime.now(UTC),
+        team_id=2,
     )
     mock_update_task_or_raise = AsyncMock(return_value=task)
     monkeypatch.setattr(

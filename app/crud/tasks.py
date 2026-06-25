@@ -5,13 +5,16 @@ from app.models.tasks import Task
 from app.schemas.tasks import TaskCreate, TaskUpdate
 
 
-async def create_task(task_data: TaskCreate, creator_id: int, db: AsyncSession) -> Task:
+async def create_task(
+    task_data: TaskCreate, creator_id: int, team_id: int, db: AsyncSession
+) -> Task:
     task = Task(
         title=task_data.title,
         description=task_data.description,
         deadline=task_data.deadline,
         creator_id=creator_id,
         assignee_id=task_data.assignee_id,
+        team_id=team_id,
     )
     db.add(task)
     await db.commit()

@@ -34,6 +34,22 @@ async def get_task_by_id_or_raise(task_id: int, db: AsyncSession) -> Task:
     return task
 
 
+async def get_task_by_id_for_user_or_raise(
+    task_id: int, current_user: User, db: AsyncSession
+) -> Task:
+    task = await task_crud.get_task_by_id(task_id, db)
+    if task is None:
+        raise TaskNotFoundError()
+    if current_user.team_id != task.team_id:
+        raise TaskNotFoundError()
+    if current_user.id == task.creator_id or current_user.id == task.assignee_id:
+        return task
+    if current_user.role in {UserRole.MANAGER, UserRole.ADMIN}:
+        return task
+
+    raise TaskNotFoundError()
+
+
 async def create_task(
     task_data: TaskCreate,
     current_user: User,
@@ -49,7 +65,12 @@ async def create_task(
             raise TaskAssigneeNotFoundError()
         if current_user.team_id != assignee.team_id:
             raise TaskAssigneeTeamMismatchError()
-    return await task_crud.create_task(task_data, current_user.id, db)
+    return await task_crud.create_task(
+        task_data,
+        current_user.id,
+        current_user.team_id,
+        db,
+    )
 
 
 async def get_user_tasks(user_id: int, db: AsyncSession) -> list[Task]:

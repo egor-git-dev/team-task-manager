@@ -55,7 +55,11 @@ async def get_task_by_id(
     db: AsyncSession = Depends(get_db),
 ) -> Task:
     try:
-        return await task_services.get_task_by_id_or_raise(task_id, db)
+        return await task_services.get_task_by_id_for_user_or_raise(
+            task_id,
+            current_user,
+            db,
+        )
     except task_services.TaskNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"

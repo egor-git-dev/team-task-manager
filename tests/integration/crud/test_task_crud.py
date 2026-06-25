@@ -1,18 +1,22 @@
+from datetime import UTC, datetime
+
 import pytest
 
 from app.crud import tasks as task_crud
 from app.models.tasks import Task
+from app.models.teams import Team
 from app.models.users import User
 from app.schemas.tasks import TaskUpdate
 
 
 @pytest.mark.asyncio
 async def test_get_user_tasks(async_session):
+    team = Team(name="test team", join_code="TEST1234", created_at=datetime.now(UTC))
     users = [
-        User(email="egor@mail.com", hashed_password="12345678"),
-        User(email="ivan@mail.com", hashed_password="87654321"),
+        User(email="egor@mail.com", hashed_password="12345678", team=team),
+        User(email="ivan@mail.com", hashed_password="87654321", team=team),
     ]
-    async_session.add_all(users)
+    async_session.add_all([team, *users])
     await async_session.commit()
     for user in users:
         await async_session.refresh(user)
@@ -22,18 +26,21 @@ async def test_get_user_tasks(async_session):
             title="Task 1",
             description="Description 1",
             creator_id=users[0].id,
+            team_id=team.id,
         ),
         Task(
             title="Task 2",
             description="Description 2",
             creator_id=users[1].id,
             assignee_id=users[0].id,
+            team_id=team.id,
         ),
         Task(
             title="Task 3",
             description="Description 3",
             creator_id=users[1].id,
             assignee_id=users[1].id,
+            team_id=team.id,
         ),
     ]
     async_session.add_all(tasks)
@@ -50,8 +57,9 @@ async def test_get_user_tasks(async_session):
 
 @pytest.mark.asyncio
 async def test_update_task(async_session):
-    user = User(email="egor@mail.com", hashed_password="12345678")
-    async_session.add(user)
+    team = Team(name="test team", join_code="TEST1234", created_at=datetime.now(UTC))
+    user = User(email="egor@mail.com", hashed_password="12345678", team=team)
+    async_session.add_all([user, team])
     await async_session.commit()
     await async_session.refresh(user)
 
@@ -59,6 +67,7 @@ async def test_update_task(async_session):
         title="Old title",
         description="Old description",
         creator_id=user.id,
+        team_id=team.id,
     )
     async_session.add(task)
     await async_session.commit()
@@ -73,14 +82,16 @@ async def test_update_task(async_session):
 
 @pytest.mark.asyncio
 async def test_delete_task(async_session):
-    user = User(email="egor@mail.com", hashed_password="12345678")
-    async_session.add(user)
+    team = Team(name="test team", join_code="TEST1234", created_at=datetime.now(UTC))
+    user = User(email="egor@mail.com", hashed_password="12345678", team=team)
+    async_session.add_all([user, team])
     await async_session.commit()
     await async_session.refresh(user)
     task = Task(
         title="Old title",
         description="Old description",
         creator_id=user.id,
+        team_id=team.id,
     )
     async_session.add(task)
     await async_session.commit()
