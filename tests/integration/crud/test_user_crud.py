@@ -17,3 +17,7 @@ async def test_update_user_team(async_session):
 
     assert updated_user is user
     assert user.team_id == team.id
+
+    no_team_user = await user_crud.update_user_team(user, None, async_session)
+
+    assert no_team_user.team_id is None

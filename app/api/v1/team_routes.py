@@ -74,3 +74,33 @@ async def get_my_team(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Team not found",
         )
+
+
+@router.delete("/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_team_member(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    try:
+        await team_services.remove_team_member_or_raise(user_id, current_user, db)
+    except team_services.TeamPermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions",
+        )
+    except team_services.UserNotInTeamError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User is not in a team",
+        )
+    except team_services.CannotRemoveYourselfError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot remove yourself",
+        )
+    except team_services.TeamMemberNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )

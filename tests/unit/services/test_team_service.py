@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.teams import Team
-from app.models.users import User
+from app.models.users import User, UserRole
 from app.schemas.teams import TeamCreate, TeamJoin
 from app.services import teams as team_services
 
@@ -196,3 +196,155 @@ async def test_get_current_user_team_or_raise_team_not_found(monkeypatch):
     with pytest.raises(team_services.TeamNotFoundError):
         await team_services.get_current_user_team_or_raise(current_user, db)
     mock_get_team_with_members.assert_awaited_once_with(current_user.team_id, db)
+
+
+@pytest.mark.asyncio
+async def test_remove_team_member_or_raise_success_by_manager(monkeypatch):
+    mock_update_user_team = AsyncMock()
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "update_user_team",
+        mock_update_user_team,
+    )
+    member = User(id=5, team_id=1)
+    mock_get_user_by_id = AsyncMock(return_value=member)
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "get_user_by_id",
+        mock_get_user_by_id,
+    )
+    current_user = User(id=1, role=UserRole.MANAGER, team_id=1)
+    db = AsyncMock(spec=AsyncSession)
+
+    result = await team_services.remove_team_member_or_raise(
+        member.id, current_user, db
+    )
+
+    assert result is None
+    mock_get_user_by_id.assert_awaited_once_with(member.id, db)
+    mock_update_user_team.assert_awaited_once_with(member, None, db)
+
+
+@pytest.mark.asyncio
+async def test_remove_team_member_or_raise_by_regular_user_error(monkeypatch):
+    mock_update_user_team = AsyncMock()
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "update_user_team",
+        mock_update_user_team,
+    )
+    member = User(id=5, team_id=1)
+    mock_get_user_by_id = AsyncMock(return_value=member)
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "get_user_by_id",
+        mock_get_user_by_id,
+    )
+    current_user = User(id=1, role=UserRole.USER, team_id=1)
+    db = AsyncMock(spec=AsyncSession)
+
+    with pytest.raises(team_services.TeamPermissionError):
+        await team_services.remove_team_member_or_raise(member.id, current_user, db)
+
+    mock_get_user_by_id.assert_not_awaited()
+    mock_update_user_team.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_remove_team_member_or_raise_by_manager_not_in_team(monkeypatch):
+    mock_update_user_team = AsyncMock()
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "update_user_team",
+        mock_update_user_team,
+    )
+    member = User(id=5, team_id=1)
+    mock_get_user_by_id = AsyncMock(return_value=member)
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "get_user_by_id",
+        mock_get_user_by_id,
+    )
+    current_user = User(id=1, role=UserRole.MANAGER, team_id=None)
+    db = AsyncMock(spec=AsyncSession)
+
+    with pytest.raises(team_services.UserNotInTeamError):
+        await team_services.remove_team_member_or_raise(member.id, current_user, db)
+
+    mock_get_user_by_id.assert_not_awaited()
+    mock_update_user_team.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_remove_team_member_or_raise_cannot_remove_yourself(monkeypatch):
+    mock_update_user_team = AsyncMock()
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "update_user_team",
+        mock_update_user_team,
+    )
+    member = User(id=1, team_id=1)
+    mock_get_user_by_id = AsyncMock(return_value=member)
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "get_user_by_id",
+        mock_get_user_by_id,
+    )
+    current_user = User(id=1, role=UserRole.MANAGER, team_id=1)
+    db = AsyncMock(spec=AsyncSession)
+
+    with pytest.raises(team_services.CannotRemoveYourselfError):
+        await team_services.remove_team_member_or_raise(member.id, current_user, db)
+
+    mock_get_user_by_id.assert_not_awaited()
+    mock_update_user_team.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_remove_team_member_or_raise_member_not_found(monkeypatch):
+    mock_update_user_team = AsyncMock()
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "update_user_team",
+        mock_update_user_team,
+    )
+    member = User(id=3, team_id=1)
+    mock_get_user_by_id = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "get_user_by_id",
+        mock_get_user_by_id,
+    )
+    current_user = User(id=1, role=UserRole.MANAGER, team_id=1)
+    db = AsyncMock(spec=AsyncSession)
+
+    with pytest.raises(team_services.TeamMemberNotFoundError):
+        await team_services.remove_team_member_or_raise(member.id, current_user, db)
+
+    mock_get_user_by_id.assert_awaited_once_with(member.id, db)
+    mock_update_user_team.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_remove_team_member_or_raise_member_from_another_team(monkeypatch):
+    mock_update_user_team = AsyncMock()
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "update_user_team",
+        mock_update_user_team,
+    )
+    member = User(id=3, team_id=3)
+    mock_get_user_by_id = AsyncMock(return_value=member)
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "get_user_by_id",
+        mock_get_user_by_id,
+    )
+    current_user = User(id=1, role=UserRole.MANAGER, team_id=1)
+    db = AsyncMock(spec=AsyncSession)
+
+    with pytest.raises(team_services.TeamMemberNotFoundError):
+        await team_services.remove_team_member_or_raise(member.id, current_user, db)
+
+    mock_get_user_by_id.assert_awaited_once_with(member.id, db)
+    mock_update_user_team.assert_not_awaited()

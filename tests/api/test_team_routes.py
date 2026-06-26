@@ -267,3 +267,150 @@ def test_get_my_team_not_found(monkeypatch):
     current_user, db = await_args.args
     assert current_user.id == 1
     mock_get_current_user_team_or_raise.assert_awaited_once()
+
+
+def test_remove_team_member_success(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1, role=UserRole.MANAGER, team_id=2)
+
+    mock_remove_team_member_or_raise = AsyncMock()
+    monkeypatch.setattr(
+        team_services,
+        "remove_team_member_or_raise",
+        mock_remove_team_member_or_raise,
+    )
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.delete("/api/v1/teams/members/5")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 204
+    mock_remove_team_member_or_raise.assert_awaited_once()
+    await_args = mock_remove_team_member_or_raise.await_args
+    assert await_args is not None
+    user_id, current_user, db = await_args.args
+    assert user_id == 5
+    assert current_user.id == 1
+    assert current_user.role == UserRole.MANAGER
+    assert current_user.team_id == 2
+
+
+def test_remove_team_member_team_permission_error(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1, role=UserRole.MANAGER, team_id=2)
+
+    mock_remove_team_member_or_raise = AsyncMock(
+        side_effect=team_services.TeamPermissionError()
+    )
+    monkeypatch.setattr(
+        team_services,
+        "remove_team_member_or_raise",
+        mock_remove_team_member_or_raise,
+    )
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.delete("/api/v1/teams/members/5")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Not enough permissions"
+    mock_remove_team_member_or_raise.assert_awaited_once()
+    await_args = mock_remove_team_member_or_raise.await_args
+    assert await_args is not None
+    user_id, current_user, db = await_args.args
+    assert user_id == 5
+    assert current_user.id == 1
+    assert current_user.role == UserRole.MANAGER
+    assert current_user.team_id == 2
+
+
+def test_remove_team_member_user_not_in_team_error(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1, role=UserRole.MANAGER, team_id=None)
+
+    mock_remove_team_member_or_raise = AsyncMock(
+        side_effect=team_services.UserNotInTeamError()
+    )
+    monkeypatch.setattr(
+        team_services,
+        "remove_team_member_or_raise",
+        mock_remove_team_member_or_raise,
+    )
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.delete("/api/v1/teams/members/5")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "User is not in a team"
+    mock_remove_team_member_or_raise.assert_awaited_once()
+    await_args = mock_remove_team_member_or_raise.await_args
+    assert await_args is not None
+    user_id, current_user, db = await_args.args
+    assert user_id == 5
+    assert current_user.id == 1
+    assert current_user.role == UserRole.MANAGER
+    assert current_user.team_id == None
+
+
+def test_remove_team_member_cannot_remove_yourself_error(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1, role=UserRole.MANAGER, team_id=2)
+
+    mock_remove_team_member_or_raise = AsyncMock(
+        side_effect=team_services.CannotRemoveYourselfError()
+    )
+    monkeypatch.setattr(
+        team_services,
+        "remove_team_member_or_raise",
+        mock_remove_team_member_or_raise,
+    )
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.delete("/api/v1/teams/members/5")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Cannot remove yourself"
+    mock_remove_team_member_or_raise.assert_awaited_once()
+    await_args = mock_remove_team_member_or_raise.await_args
+    assert await_args is not None
+    user_id, current_user, db = await_args.args
+    assert user_id == 5
+    assert current_user.id == 1
+    assert current_user.role == UserRole.MANAGER
+    assert current_user.team_id == 2
+
+
+def test_remove_team_member_not_found_error(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1, role=UserRole.MANAGER, team_id=2)
+
+    mock_remove_team_member_or_raise = AsyncMock(
+        side_effect=team_services.TeamMemberNotFoundError()
+    )
+    monkeypatch.setattr(
+        team_services,
+        "remove_team_member_or_raise",
+        mock_remove_team_member_or_raise,
+    )
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.delete("/api/v1/teams/members/5")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "User not found"
+    mock_remove_team_member_or_raise.assert_awaited_once()
+    await_args = mock_remove_team_member_or_raise.await_args
+    assert await_args is not None
+    user_id, current_user, db = await_args.args
+    assert user_id == 5
+    assert current_user.id == 1
+    assert current_user.role == UserRole.MANAGER
+    assert current_user.team_id == 2

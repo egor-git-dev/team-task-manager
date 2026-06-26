@@ -33,7 +33,7 @@ async def get_user_by_id(user_id: int, db: AsyncSession) -> User | None:
     return result.scalar_one_or_none()
 
 
-async def update_user_team(user: User, team_id: int, db: AsyncSession) -> User:
+async def update_user_team(user: User, team_id: int | None, db: AsyncSession) -> User:
     user.team_id = team_id
     await db.commit()
     await db.refresh(user)

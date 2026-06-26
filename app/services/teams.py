@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud import teams as team_crud
 from app.crud import users as user_crud
 from app.models.teams import Team
-from app.models.users import User
+from app.models.users import User, UserRole
 from app.schemas.teams import TeamCreate, TeamJoin
 
 
@@ -23,6 +23,18 @@ class UserAlreadyInTeamError(Exception):
 
 
 class UserNotInTeamError(Exception):
+    pass
+
+
+class TeamPermissionError(Exception):
+    pass
+
+
+class CannotRemoveYourselfError(Exception):
+    pass
+
+
+class TeamMemberNotFoundError(Exception):
     pass
 
 
@@ -63,3 +75,21 @@ async def get_current_user_team_or_raise(current_user: User, db: AsyncSession) -
         raise TeamNotFoundError()
 
     return team
+
+
+async def remove_team_member_or_raise(
+    member_id: int, current_user: User, db: AsyncSession
+) -> None:
+    if current_user.role not in {UserRole.MANAGER, UserRole.ADMIN}:
+        raise TeamPermissionError()
+    if current_user.team_id is None:
+        raise UserNotInTeamError()
+    if current_user.id == member_id:
+        raise CannotRemoveYourselfError()
+    member = await user_crud.get_user_by_id(member_id, db)
+    if member is None:
+        raise TeamMemberNotFoundError()
+    if current_user.team_id != member.team_id:
+        raise TeamMemberNotFoundError()
+
+    await user_crud.update_user_team(member, None, db)
