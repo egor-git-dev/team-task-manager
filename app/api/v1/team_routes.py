@@ -10,7 +10,7 @@ from app.schemas.teams import (
     TeamWithJoinCodeRead,
     TeamWithMembersRead,
 )
-from app.schemas.users import UserRead
+from app.schemas.users import UserRead, UserRoleUpdate
 from app.services import teams as team_services
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
@@ -98,6 +98,42 @@ async def remove_team_member(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot remove yourself",
+        )
+    except team_services.TeamMemberNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+
+@router.patch("/members/{member_id}/role", response_model=UserRead)
+async def update_team_member_role(
+    member_id: int,
+    role_data: UserRoleUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    try:
+        return await team_services.update_team_member_role_or_raise(
+            member_id,
+            role_data,
+            current_user,
+            db,
+        )
+    except team_services.TeamPermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions",
+        )
+    except team_services.UserNotInTeamError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User is not in a team",
+        )
+    except team_services.CannotUpdateYourRoleError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot update your own role",
         )
     except team_services.TeamMemberNotFoundError:
         raise HTTPException(

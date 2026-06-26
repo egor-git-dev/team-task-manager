@@ -21,3 +21,7 @@ class UserRead(UserBase):
     role: UserRole
     created_at: datetime
     team_id: int | None
+
+
+class UserRoleUpdate(BaseModel):
+    role: UserRole

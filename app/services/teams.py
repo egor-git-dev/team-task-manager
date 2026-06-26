@@ -8,6 +8,7 @@ from app.crud import users as user_crud
 from app.models.teams import Team
 from app.models.users import User, UserRole
 from app.schemas.teams import TeamCreate, TeamJoin
+from app.schemas.users import UserRoleUpdate
 
 
 class TeamJoinCodeGenerationError(Exception):
@@ -31,6 +32,10 @@ class TeamPermissionError(Exception):
 
 
 class CannotRemoveYourselfError(Exception):
+    pass
+
+
+class CannotUpdateYourRoleError(Exception):
     pass
 
 
@@ -93,3 +98,21 @@ async def remove_team_member_or_raise(
         raise TeamMemberNotFoundError()
 
     await user_crud.update_user_team(member, None, db)
+
+
+async def update_team_member_role_or_raise(
+    member_id: int, role_data: UserRoleUpdate, current_user: User, db: AsyncSession
+) -> User:
+    if current_user.role != UserRole.ADMIN:
+        raise TeamPermissionError()
+    if current_user.team_id is None:
+        raise UserNotInTeamError()
+    if current_user.id == member_id:
+        raise CannotUpdateYourRoleError()
+    member = await user_crud.get_user_by_id(member_id, db)
+    if member is None:
+        raise TeamMemberNotFoundError()
+    if current_user.team_id != member.team_id:
+        raise TeamMemberNotFoundError()
+
+    return await user_crud.update_user_role(member, role_data.role, db)

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.teams import Team
 from app.models.users import User, UserRole
 from app.schemas.teams import TeamCreate, TeamJoin
+from app.schemas.users import UserRoleUpdate
 from app.services import teams as team_services
 
 
@@ -348,3 +349,154 @@ async def test_remove_team_member_or_raise_member_from_another_team(monkeypatch)
 
     mock_get_user_by_id.assert_awaited_once_with(member.id, db)
     mock_update_user_team.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_team_member_role_or_raise_success(monkeypatch):
+    member = User(id=2, role=UserRole.USER, team_id=3)
+    updated_member = User(id=2, role=UserRole.MANAGER, team_id=3)
+    mock_get_user_by_id = AsyncMock(return_value=member)
+    mock_update_user_role = AsyncMock(return_value=updated_member)
+    monkeypatch.setattr(team_services.user_crud, "get_user_by_id", mock_get_user_by_id)
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "update_user_role",
+        mock_update_user_role,
+    )
+    role_data = UserRoleUpdate(role=UserRole.MANAGER)
+    current_user = User(id=1, role=UserRole.ADMIN, team_id=3)
+    db = AsyncMock(spec=AsyncSession)
+
+    result = await team_services.update_team_member_role_or_raise(
+        member.id, role_data, current_user, db
+    )
+
+    assert result is updated_member
+    mock_get_user_by_id.assert_awaited_once_with(member.id, db)
+    mock_update_user_role.assert_awaited_once_with(member, role_data.role, db)
+
+
+@pytest.mark.asyncio
+async def test_update_team_member_role_or_raise_team_permission_error(monkeypatch):
+    member = User(id=2, role=UserRole.USER, team_id=3)
+    mock_get_user_by_id = AsyncMock(return_value=member)
+    mock_update_user_role = AsyncMock(return_value=member)
+    monkeypatch.setattr(team_services.user_crud, "get_user_by_id", mock_get_user_by_id)
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "update_user_role",
+        mock_update_user_role,
+    )
+    role_data = UserRoleUpdate(role=UserRole.MANAGER)
+    current_user = User(id=1, role=UserRole.USER, team_id=3)
+    db = AsyncMock(spec=AsyncSession)
+
+    with pytest.raises(team_services.TeamPermissionError):
+        await team_services.update_team_member_role_or_raise(
+            member.id, role_data, current_user, db
+        )
+
+    mock_get_user_by_id.assert_not_awaited()
+    mock_update_user_role.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_team_member_role_or_raise_user_not_in_team_error(monkeypatch):
+    member = User(id=2, role=UserRole.USER, team_id=3)
+    mock_get_user_by_id = AsyncMock(return_value=member)
+    mock_update_user_role = AsyncMock(return_value=member)
+    monkeypatch.setattr(team_services.user_crud, "get_user_by_id", mock_get_user_by_id)
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "update_user_role",
+        mock_update_user_role,
+    )
+    role_data = UserRoleUpdate(role=UserRole.MANAGER)
+    current_user = User(id=1, role=UserRole.ADMIN, team_id=None)
+    db = AsyncMock(spec=AsyncSession)
+
+    with pytest.raises(team_services.UserNotInTeamError):
+        await team_services.update_team_member_role_or_raise(
+            member.id, role_data, current_user, db
+        )
+
+    mock_get_user_by_id.assert_not_awaited()
+    mock_update_user_role.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_team_member_role_or_raise_cannot_update_your_role_error(
+    monkeypatch,
+):
+    member = User(id=2, role=UserRole.USER, team_id=3)
+    mock_get_user_by_id = AsyncMock(return_value=member)
+    mock_update_user_role = AsyncMock(return_value=member)
+    monkeypatch.setattr(team_services.user_crud, "get_user_by_id", mock_get_user_by_id)
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "update_user_role",
+        mock_update_user_role,
+    )
+    role_data = UserRoleUpdate(role=UserRole.MANAGER)
+    current_user = User(id=2, role=UserRole.ADMIN, team_id=3)
+    db = AsyncMock(spec=AsyncSession)
+
+    with pytest.raises(team_services.CannotUpdateYourRoleError):
+        await team_services.update_team_member_role_or_raise(
+            member.id, role_data, current_user, db
+        )
+
+    mock_get_user_by_id.assert_not_awaited()
+    mock_update_user_role.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_team_member_role_or_raise_team_member_not_found(
+    monkeypatch,
+):
+    member = User(id=2, role=UserRole.USER, team_id=3)
+    mock_get_user_by_id = AsyncMock(return_value=None)
+    mock_update_user_role = AsyncMock()
+    monkeypatch.setattr(team_services.user_crud, "get_user_by_id", mock_get_user_by_id)
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "update_user_role",
+        mock_update_user_role,
+    )
+    role_data = UserRoleUpdate(role=UserRole.MANAGER)
+    current_user = User(id=1, role=UserRole.ADMIN, team_id=3)
+    db = AsyncMock(spec=AsyncSession)
+
+    with pytest.raises(team_services.TeamMemberNotFoundError):
+        await team_services.update_team_member_role_or_raise(
+            member.id, role_data, current_user, db
+        )
+
+    mock_get_user_by_id.assert_awaited_once_with(member.id, db)
+    mock_update_user_role.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_team_member_role_or_raise_team_member_in_other_team(
+    monkeypatch,
+):
+    member = User(id=2, role=UserRole.USER, team_id=2)
+    mock_get_user_by_id = AsyncMock(return_value=member)
+    mock_update_user_role = AsyncMock()
+    monkeypatch.setattr(team_services.user_crud, "get_user_by_id", mock_get_user_by_id)
+    monkeypatch.setattr(
+        team_services.user_crud,
+        "update_user_role",
+        mock_update_user_role,
+    )
+    role_data = UserRoleUpdate(role=UserRole.MANAGER)
+    current_user = User(id=1, role=UserRole.ADMIN, team_id=3)
+    db = AsyncMock(spec=AsyncSession)
+
+    with pytest.raises(team_services.TeamMemberNotFoundError):
+        await team_services.update_team_member_role_or_raise(
+            member.id, role_data, current_user, db
+        )
+
+    mock_get_user_by_id.assert_awaited_once_with(member.id, db)
+    mock_update_user_role.assert_not_awaited()

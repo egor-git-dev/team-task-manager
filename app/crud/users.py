@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import get_password_hash
-from app.models.users import User
+from app.models.users import User, UserRole
 from app.schemas.users import UserCreate
 
 
@@ -35,6 +35,14 @@ async def get_user_by_id(user_id: int, db: AsyncSession) -> User | None:
 
 async def update_user_team(user: User, team_id: int | None, db: AsyncSession) -> User:
     user.team_id = team_id
+    await db.commit()
+    await db.refresh(user)
+
+    return user
+
+
+async def update_user_role(user: User, role: UserRole, db: AsyncSession) -> User:
+    user.role = role
     await db.commit()
     await db.refresh(user)
 

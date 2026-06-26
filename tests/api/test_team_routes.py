@@ -353,7 +353,7 @@ def test_remove_team_member_user_not_in_team_error(monkeypatch):
     assert user_id == 5
     assert current_user.id == 1
     assert current_user.role == UserRole.MANAGER
-    assert current_user.team_id == None
+    assert current_user.team_id is None
 
 
 def test_remove_team_member_cannot_remove_yourself_error(monkeypatch):
@@ -414,3 +414,179 @@ def test_remove_team_member_not_found_error(monkeypatch):
     assert current_user.id == 1
     assert current_user.role == UserRole.MANAGER
     assert current_user.team_id == 2
+
+
+def test_update_team_member_role_success(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1, role=UserRole.ADMIN, team_id=2)
+
+    member = User(
+        id=5,
+        email="test@example.com",
+        is_active=True,
+        role=UserRole.MANAGER,
+        team_id=2,
+        created_at=datetime.now(UTC),
+    )
+    mock_update_team_member_role_or_raise = AsyncMock(return_value=member)
+    monkeypatch.setattr(
+        team_services,
+        "update_team_member_role_or_raise",
+        mock_update_team_member_role_or_raise,
+    )
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.patch(
+            "/api/v1/teams/members/5/role", json={"role": "manager"}
+        )
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert data["role"] == "manager"
+    mock_update_team_member_role_or_raise.assert_awaited_once()
+    await_args = mock_update_team_member_role_or_raise.await_args
+    assert await_args is not None
+    member_id, role_data, current_user, db = await_args.args
+    assert member_id == 5
+    assert role_data.role == UserRole.MANAGER
+    assert current_user.id == 1
+    assert current_user.team_id == 2
+    assert current_user.role == UserRole.ADMIN
+
+
+def test_update_team_member_role_by_manager_permission_error(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1, role=UserRole.MANAGER, team_id=2)
+
+    mock_update_team_member_role_or_raise = AsyncMock(
+        side_effect=team_services.TeamPermissionError()
+    )
+    monkeypatch.setattr(
+        team_services,
+        "update_team_member_role_or_raise",
+        mock_update_team_member_role_or_raise,
+    )
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.patch(
+            "/api/v1/teams/members/5/role", json={"role": "manager"}
+        )
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert data["detail"] == "Not enough permissions"
+    mock_update_team_member_role_or_raise.assert_awaited_once()
+    await_args = mock_update_team_member_role_or_raise.await_args
+    assert await_args is not None
+    member_id, role_data, current_user, db = await_args.args
+    assert member_id == 5
+    assert role_data.role == UserRole.MANAGER
+    assert current_user.id == 1
+    assert current_user.team_id == 2
+    assert current_user.role == UserRole.MANAGER
+
+
+def test_update_team_member_role_user_not_in_team_error(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1, role=UserRole.MANAGER, team_id=None)
+
+    mock_update_team_member_role_or_raise = AsyncMock(
+        side_effect=team_services.UserNotInTeamError()
+    )
+    monkeypatch.setattr(
+        team_services,
+        "update_team_member_role_or_raise",
+        mock_update_team_member_role_or_raise,
+    )
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.patch(
+            "/api/v1/teams/members/5/role", json={"role": "manager"}
+        )
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert data["detail"] == "User is not in a team"
+    mock_update_team_member_role_or_raise.assert_awaited_once()
+    await_args = mock_update_team_member_role_or_raise.await_args
+    assert await_args is not None
+    member_id, role_data, current_user, db = await_args.args
+    assert member_id == 5
+    assert role_data.role == UserRole.MANAGER
+    assert current_user.id == 1
+    assert current_user.team_id is None
+    assert current_user.role == UserRole.MANAGER
+
+
+def test_update_team_member_role_cannot_update_yourself_error(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1, role=UserRole.ADMIN, team_id=2)
+
+    mock_update_team_member_role_or_raise = AsyncMock(
+        side_effect=team_services.CannotUpdateYourRoleError()
+    )
+    monkeypatch.setattr(
+        team_services,
+        "update_team_member_role_or_raise",
+        mock_update_team_member_role_or_raise,
+    )
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.patch(
+            "/api/v1/teams/members/1/role", json={"role": "manager"}
+        )
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert data["detail"] == "Cannot update your own role"
+    mock_update_team_member_role_or_raise.assert_awaited_once()
+    await_args = mock_update_team_member_role_or_raise.await_args
+    assert await_args is not None
+    member_id, role_data, current_user, db = await_args.args
+    assert member_id == 1
+    assert role_data.role == UserRole.MANAGER
+    assert current_user.id == 1
+    assert current_user.team_id == 2
+    assert current_user.role == UserRole.ADMIN
+
+
+def test_update_team_member_role_team_member_not_found(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=1, role=UserRole.ADMIN, team_id=2)
+
+    mock_update_team_member_role_or_raise = AsyncMock(
+        side_effect=team_services.TeamMemberNotFoundError()
+    )
+    monkeypatch.setattr(
+        team_services,
+        "update_team_member_role_or_raise",
+        mock_update_team_member_role_or_raise,
+    )
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+    try:
+        response = client.patch(
+            "/api/v1/teams/members/5/role", json={"role": "manager"}
+        )
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert data["detail"] == "User not found"
+    mock_update_team_member_role_or_raise.assert_awaited_once()
+    await_args = mock_update_team_member_role_or_raise.await_args
+    assert await_args is not None
+    member_id, role_data, current_user, db = await_args.args
+    assert member_id == 5
+    assert role_data.role == UserRole.MANAGER
+    assert current_user.id == 1
+    assert current_user.team_id == 2
+    assert current_user.role == UserRole.ADMIN
