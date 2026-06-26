@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.models.comments import Comment
     from app.models.teams import Team
     from app.models.users import User
 
@@ -69,3 +70,4 @@ class Task(Base):
         back_populates="tasks",
         foreign_keys=[team_id],
     )
+    comments: Mapped[list["Comment"]] = relationship(back_populates="task")
