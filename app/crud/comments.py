@@ -32,3 +32,14 @@ async def get_task_comments(task_id: int, db: AsyncSession) -> list[Comment]:
     result = await db.execute(query)
 
     return list(result.scalars().all())
+
+
+async def get_comment_by_id(comment_id: int, db: AsyncSession) -> Comment | None:
+    query = select(Comment).where(Comment.id == comment_id)
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+
+async def delete_comment(comment: Comment, db: AsyncSession) -> None:
+    await db.delete(comment)
+    await db.commit()

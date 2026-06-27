@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.comments import Comment
 from app.models.tasks import Task
-from app.models.users import User
+from app.models.users import User, UserRole
 from app.schemas.comments import CommentCreate
 from app.services import comments as comment_services
 from app.services import tasks as task_services
@@ -148,3 +148,183 @@ async def test_get_task_comments_for_user_or_raise_task_not_found_error(monkeypa
         task_id, current_user, db
     )
     mock_get_task_comments.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_comment_by_id_or_raise_success(monkeypatch):
+    task = Task(id=3)
+    comment = Comment(id=1, text="test comment", task_id=3)
+    mock_get_task_by_id_for_user_or_raise = AsyncMock(return_value=task)
+    mock_get_comment_by_id = AsyncMock(return_value=comment)
+    monkeypatch.setattr(
+        comment_services.task_services,
+        "get_task_by_id_for_user_or_raise",
+        mock_get_task_by_id_for_user_or_raise,
+    )
+    monkeypatch.setattr(
+        comment_services.comment_crud,
+        "get_comment_by_id",
+        mock_get_comment_by_id,
+    )
+    db = AsyncMock(spec=AsyncSession)
+    current_user = User(id=1, team_id=3, role=UserRole.MANAGER)
+
+    result = await comment_services.get_comment_by_id_or_raise(
+        task.id, comment.id, current_user, db
+    )
+
+    assert result is comment
+    mock_get_task_by_id_for_user_or_raise.assert_awaited_once_with(
+        task.id, current_user, db
+    )
+    mock_get_comment_by_id.assert_awaited_once_with(comment.id, db)
+
+
+@pytest.mark.asyncio
+async def test_get_comment_by_id_or_raise_comment_not_found(monkeypatch):
+    task = Task(id=3)
+    comment = Comment(id=1, text="test comment", task_id=3)
+    mock_get_task_by_id_for_user_or_raise = AsyncMock(return_value=task)
+    mock_get_comment_by_id = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        comment_services.task_services,
+        "get_task_by_id_for_user_or_raise",
+        mock_get_task_by_id_for_user_or_raise,
+    )
+    monkeypatch.setattr(
+        comment_services.comment_crud,
+        "get_comment_by_id",
+        mock_get_comment_by_id,
+    )
+    db = AsyncMock(spec=AsyncSession)
+    current_user = User(id=1, team_id=3, role=UserRole.MANAGER)
+
+    with pytest.raises(comment_services.CommentNotFoundError):
+        await comment_services.get_comment_by_id_or_raise(
+            task.id, comment.id, current_user, db
+        )
+
+    mock_get_task_by_id_for_user_or_raise.assert_awaited_once_with(
+        task.id, current_user, db
+    )
+    mock_get_comment_by_id.assert_awaited_once_with(comment.id, db)
+
+
+@pytest.mark.asyncio
+async def test_get_comment_by_id_or_raise_comment_belongs_to_another_task(monkeypatch):
+    task = Task(id=5)
+    comment = Comment(id=1, text="test comment", task_id=3)
+    mock_get_task_by_id_for_user_or_raise = AsyncMock(return_value=task)
+    mock_get_comment_by_id = AsyncMock(return_value=comment)
+    monkeypatch.setattr(
+        comment_services.task_services,
+        "get_task_by_id_for_user_or_raise",
+        mock_get_task_by_id_for_user_or_raise,
+    )
+    monkeypatch.setattr(
+        comment_services.comment_crud,
+        "get_comment_by_id",
+        mock_get_comment_by_id,
+    )
+    db = AsyncMock(spec=AsyncSession)
+    current_user = User(id=1, team_id=3, role=UserRole.MANAGER)
+
+    with pytest.raises(comment_services.CommentNotFoundError):
+        await comment_services.get_comment_by_id_or_raise(
+            task.id, comment.id, current_user, db
+        )
+
+    mock_get_task_by_id_for_user_or_raise.assert_awaited_once_with(
+        task.id, current_user, db
+    )
+    mock_get_comment_by_id.assert_awaited_once_with(comment.id, db)
+
+
+@pytest.mark.asyncio
+async def test_delete_comment_or_raise_success(monkeypatch):
+    task = Task(id=5)
+    comment = Comment(id=1, text="test comment", task_id=5, author_id=3)
+    mock_get_comment_by_id_or_raise = AsyncMock(return_value=comment)
+    mock_delete_comment = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        comment_services,
+        "get_comment_by_id_or_raise",
+        mock_get_comment_by_id_or_raise,
+    )
+    monkeypatch.setattr(
+        comment_services.comment_crud,
+        "delete_comment",
+        mock_delete_comment,
+    )
+    db = AsyncMock(spec=AsyncSession)
+    current_user = User(id=3, team_id=3)
+
+    result = await comment_services.delete_comment_or_raise(
+        task.id, comment.id, current_user, db
+    )
+
+    assert result is None
+    mock_get_comment_by_id_or_raise.assert_awaited_once_with(
+        task.id, comment.id, current_user, db
+    )
+    mock_delete_comment.assert_awaited_once_with(comment, db)
+
+
+@pytest.mark.asyncio
+async def test_delete_comment_or_raise_success_by_manager(monkeypatch):
+    task = Task(id=5)
+    comment = Comment(id=1, text="test comment", task_id=5, author_id=2)
+    mock_get_comment_by_id_or_raise = AsyncMock(return_value=comment)
+    mock_delete_comment = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        comment_services,
+        "get_comment_by_id_or_raise",
+        mock_get_comment_by_id_or_raise,
+    )
+    monkeypatch.setattr(
+        comment_services.comment_crud,
+        "delete_comment",
+        mock_delete_comment,
+    )
+    db = AsyncMock(spec=AsyncSession)
+    current_user = User(id=3, team_id=3, role=UserRole.MANAGER)
+
+    result = await comment_services.delete_comment_or_raise(
+        task.id, comment.id, current_user, db
+    )
+
+    assert result is None
+    mock_get_comment_by_id_or_raise.assert_awaited_once_with(
+        task.id, comment.id, current_user, db
+    )
+    mock_delete_comment.assert_awaited_once_with(comment, db)
+
+
+@pytest.mark.asyncio
+async def test_delete_comment_or_raise_not_author_permission_error(monkeypatch):
+    task = Task(id=5)
+    comment = Comment(id=1, text="test comment", task_id=5, author_id=2)
+    mock_get_comment_by_id_or_raise = AsyncMock(return_value=comment)
+    mock_delete_comment = AsyncMock()
+    monkeypatch.setattr(
+        comment_services,
+        "get_comment_by_id_or_raise",
+        mock_get_comment_by_id_or_raise,
+    )
+    monkeypatch.setattr(
+        comment_services.comment_crud,
+        "delete_comment",
+        mock_delete_comment,
+    )
+    db = AsyncMock(spec=AsyncSession)
+    current_user = User(id=3, team_id=3, role=UserRole.USER)
+
+    with pytest.raises(comment_services.CommentPermissionError):
+        await comment_services.delete_comment_or_raise(
+            task.id, comment.id, current_user, db
+        )
+
+    mock_get_comment_by_id_or_raise.assert_awaited_once_with(
+        task.id, comment.id, current_user, db
+    )
+    mock_delete_comment.assert_not_awaited()

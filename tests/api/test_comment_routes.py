@@ -6,7 +6,6 @@ from fastapi.testclient import TestClient
 from app.api.deps import get_current_user
 from app.main import app
 from app.models.comments import Comment
-from app.models.tasks import Task, TaskStatus
 from app.models.users import User
 from app.services import comments as comment_services
 from app.services import tasks as task_services
@@ -165,4 +164,121 @@ def test_get_task_comments_task_not_found_error(monkeypatch):
     assert await_args is not None
     task_id, current_user, db = await_args.args
     assert task_id == 3
+    assert current_user.id == 5
+
+
+def test_delete_comment_success(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=5)
+
+    mock_delete_comment_or_raise = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        comment_services,
+        "delete_comment_or_raise",
+        mock_delete_comment_or_raise,
+    )
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+
+    try:
+        response = client.delete("/api/v1/tasks/5/comments/2")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 204
+    mock_delete_comment_or_raise.assert_awaited_once()
+    await_args = mock_delete_comment_or_raise.await_args
+    assert await_args is not None
+    task_id, comment_id, current_user, db = await_args.args
+    assert task_id == 5
+    assert comment_id == 2
+    assert current_user.id == 5
+
+
+def test_delete_comment_task_not_found(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=5)
+
+    mock_delete_comment_or_raise = AsyncMock(
+        side_effect=task_services.TaskNotFoundError()
+    )
+    monkeypatch.setattr(
+        comment_services,
+        "delete_comment_or_raise",
+        mock_delete_comment_or_raise,
+    )
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+
+    try:
+        response = client.delete("/api/v1/tasks/5/comments/2")
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert data["detail"] == "Task not found"
+    await_args = mock_delete_comment_or_raise.await_args
+    assert await_args is not None
+    task_id, comment_id, current_user, db = await_args.args
+    assert task_id == 5
+    assert comment_id == 2
+    assert current_user.id == 5
+
+
+def test_delete_comment_not_found(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=5)
+
+    mock_delete_comment_or_raise = AsyncMock(
+        side_effect=comment_services.CommentNotFoundError()
+    )
+    monkeypatch.setattr(
+        comment_services,
+        "delete_comment_or_raise",
+        mock_delete_comment_or_raise,
+    )
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+
+    try:
+        response = client.delete("/api/v1/tasks/5/comments/2")
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert data["detail"] == "Comment not found"
+    await_args = mock_delete_comment_or_raise.await_args
+    assert await_args is not None
+    task_id, comment_id, current_user, db = await_args.args
+    assert task_id == 5
+    assert comment_id == 2
+    assert current_user.id == 5
+
+
+def test_delete_comment_permission_error(monkeypatch):
+    async def fake_get_current_user():
+        return User(id=5)
+
+    mock_delete_comment_or_raise = AsyncMock(
+        side_effect=comment_services.CommentPermissionError()
+    )
+    monkeypatch.setattr(
+        comment_services,
+        "delete_comment_or_raise",
+        mock_delete_comment_or_raise,
+    )
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+
+    try:
+        response = client.delete("/api/v1/tasks/5/comments/2")
+        data = response.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert data["detail"] == "Not enough permissions"
+    await_args = mock_delete_comment_or_raise.await_args
+    assert await_args is not None
+    task_id, comment_id, current_user, db = await_args.args
+    assert task_id == 5
+    assert comment_id == 2
     assert current_user.id == 5
