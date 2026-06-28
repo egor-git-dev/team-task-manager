@@ -12,6 +12,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.comments import Comment
+    from app.models.evaluations import Evaluation
     from app.models.tasks import Task
     from app.models.teams import Team
 
@@ -56,3 +57,11 @@ class User(Base):
     )
     team: Mapped["Team | None"] = relationship(back_populates="users")
     comments: Mapped[list["Comment"]] = relationship(back_populates="author")
+    given_evaluations: Mapped[list["Evaluation"]] = relationship(
+        back_populates="evaluator",
+        foreign_keys="Evaluation.evaluator_id",
+    )
+    received_evaluations: Mapped[list["Evaluation"]] = relationship(
+        back_populates="user",
+        foreign_keys="Evaluation.user_id",
+    )
