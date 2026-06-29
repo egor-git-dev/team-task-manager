@@ -1,3 +1,4 @@
+from fastapi.testclient import TestClient
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -6,7 +7,7 @@ from app.api.deps import get_current_user
 from app.core.config import settings
 from app.db.base import Base
 from app.main import app
-from app.models import tasks, teams, users  # noqa: F401
+from app.models import tasks, teams, users, comments, evaluations, meetings  # noqa: F401
 
 
 @pytest_asyncio.fixture()
@@ -31,3 +32,8 @@ async def async_session():
             await conn.run_sync(Base.metadata.drop_all)
 
         await engine.dispose()
+
+
+@pytest.fixture
+def client():
+    return TestClient(app)

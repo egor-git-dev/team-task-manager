@@ -43,4 +43,6 @@ async def get_current_user(
 
     if user is None:
         raise credential_exception
+    if user.is_active is False:
+        raise credential_exception
     return user

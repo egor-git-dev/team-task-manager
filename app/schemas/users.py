@@ -25,3 +25,8 @@ class UserRead(UserBase):
 
 class UserRoleUpdate(BaseModel):
     role: UserRole
+
+
+class UserUpdate(BaseModel):
+    email: EmailStr | None = Field(default=None, max_length=100)
+    password: str | None = Field(default=None, min_length=8)

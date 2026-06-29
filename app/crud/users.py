@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import get_password_hash
 from app.models.users import User, UserRole
-from app.schemas.users import UserCreate
+from app.schemas.users import UserCreate, UserUpdate
 
 
 async def create_user(user_data: UserCreate, db: AsyncSession) -> User:
@@ -46,4 +46,25 @@ async def update_user_role(user: User, role: UserRole, db: AsyncSession) -> User
     await db.commit()
     await db.refresh(user)
 
+    return user
+
+
+async def deactivate_user(user: User, db: AsyncSession) -> User:
+    user.is_active = False
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def update_user(user: User, user_data: UserUpdate, db: AsyncSession) -> User:
+    update_data = user_data.model_dump(exclude_unset=True)
+
+    if "email" in update_data:
+        user.email = update_data["email"]
+
+    if "password" in update_data:
+        user.hashed_password = get_password_hash(update_data["password"])
+
+    await db.commit()
+    await db.refresh(user)
     return user
