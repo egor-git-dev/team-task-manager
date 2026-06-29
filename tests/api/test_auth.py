@@ -1,14 +1,9 @@
-from fastapi.testclient import TestClient
-
 from app.core import security
-from app.main import app
 from app.models.users import User
 from app.services import users as user_service
 
-client = TestClient(app)
 
-
-def test_login_user_success(monkeypatch):
+def test_login_user_success(client, monkeypatch):
     user = User(id=1, email="test@example.com")
 
     async def fake_authenticate_user(email, password, db):
@@ -35,7 +30,7 @@ def test_login_user_success(monkeypatch):
     assert data["token_type"] == "bearer"
 
 
-def test_login_user_with_invalid_credentials(monkeypatch):
+def test_login_user_with_invalid_credentials(client, monkeypatch):
     async def fake_authenticate_user(email, password, db):
         raise user_service.InvalidCredentialsError()
 

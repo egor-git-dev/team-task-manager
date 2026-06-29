@@ -1,18 +1,12 @@
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
-from fastapi.testclient import TestClient
-
-from app.api.deps import get_current_user
-from app.main import app
 from app.models.tasks import Task, TaskStatus
 from app.models.users import User
 from app.services import tasks as task_services
 
-client = TestClient(app)
 
-
-def test_create_task_success(monkeypatch):
+def test_create_task_success(client, override_current_user, monkeypatch):
     task = Task(
         id=1,
         title="test title",
@@ -24,25 +18,21 @@ def test_create_task_success(monkeypatch):
         team_id=2,
     )
 
-    async def fake_get_current_user():
-        return User(id=1)
+    override_current_user(User(id=1))
 
     mock_create_task = AsyncMock(return_value=task)
 
     monkeypatch.setattr(task_services, "create_task", mock_create_task)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post(
-            "/api/v1/tasks",
-            json={
-                "title": "test title",
-                "description": "test description",
-                "assignee_id": 2,
-            },
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.post(
+        "/api/v1/tasks",
+        json={
+            "title": "test title",
+            "description": "test description",
+            "assignee_id": 2,
+        },
+    )
+    data = response.json()
 
     assert response.status_code == 201
     assert data["title"] == "test title"
@@ -59,26 +49,22 @@ def test_create_task_success(monkeypatch):
     assert task_data.assignee_id == 2
 
 
-def test_create_task_permission_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1)
+def test_create_task_permission_error(client, override_current_user, monkeypatch):
+    override_current_user(User(id=1))
 
     mock_create_task = AsyncMock(side_effect=task_services.TaskPermissionError())
 
     monkeypatch.setattr(task_services, "create_task", mock_create_task)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post(
-            "/api/v1/tasks",
-            json={
-                "title": "test title",
-                "description": "test description",
-                "assignee_id": 2,
-            },
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.post(
+        "/api/v1/tasks",
+        json={
+            "title": "test title",
+            "description": "test description",
+            "assignee_id": 2,
+        },
+    )
+    data = response.json()
 
     assert response.status_code == 403
     assert data["detail"] == "Not enough permissions"
@@ -92,26 +78,20 @@ def test_create_task_permission_error(monkeypatch):
     assert task_data.assignee_id == 2
 
 
-def test_create_task_user_not_in_team_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1)
-
+def test_create_task_user_not_in_team_error(client, override_current_user, monkeypatch):
+    override_current_user(User(id=1))
     mock_create_task = AsyncMock(side_effect=task_services.UserNotInTeamError())
-
     monkeypatch.setattr(task_services, "create_task", mock_create_task)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post(
-            "/api/v1/tasks",
-            json={
-                "title": "test title",
-                "description": "test description",
-                "assignee_id": 2,
-            },
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.post(
+        "/api/v1/tasks",
+        json={
+            "title": "test title",
+            "description": "test description",
+            "assignee_id": 2,
+        },
+    )
+    data = response.json()
 
     assert response.status_code == 409
     assert data["detail"] == "User is not in a team"
@@ -125,26 +105,22 @@ def test_create_task_user_not_in_team_error(monkeypatch):
     assert task_data.assignee_id == 2
 
 
-def test_create_task_assignee_not_found_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1)
-
+def test_create_task_assignee_not_found_error(
+    client, override_current_user, monkeypatch
+):
+    override_current_user(User(id=1))
     mock_create_task = AsyncMock(side_effect=task_services.TaskAssigneeNotFoundError())
-
     monkeypatch.setattr(task_services, "create_task", mock_create_task)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post(
-            "/api/v1/tasks",
-            json={
-                "title": "test title",
-                "description": "test description",
-                "assignee_id": 2,
-            },
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.post(
+        "/api/v1/tasks",
+        json={
+            "title": "test title",
+            "description": "test description",
+            "assignee_id": 2,
+        },
+    )
+    data = response.json()
 
     assert response.status_code == 404
     assert data["detail"] == "User not found"
@@ -158,28 +134,22 @@ def test_create_task_assignee_not_found_error(monkeypatch):
     assert task_data.assignee_id == 2
 
 
-def test_create_task_team_mismatch_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1)
-
+def test_create_task_team_mismatch_error(client, override_current_user, monkeypatch):
+    override_current_user(User(id=1))
     mock_create_task = AsyncMock(
         side_effect=task_services.TaskAssigneeTeamMismatchError()
     )
-
     monkeypatch.setattr(task_services, "create_task", mock_create_task)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post(
-            "/api/v1/tasks",
-            json={
-                "title": "test title",
-                "description": "test description",
-                "assignee_id": 2,
-            },
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.post(
+        "/api/v1/tasks",
+        json={
+            "title": "test title",
+            "description": "test description",
+            "assignee_id": 2,
+        },
+    )
+    data = response.json()
 
     assert response.status_code == 409
     assert data["detail"] == "Creator and assignee must be in one team"
@@ -193,7 +163,7 @@ def test_create_task_team_mismatch_error(monkeypatch):
     assert task_data.assignee_id == 2
 
 
-def test_get_task_by_id_success(monkeypatch):
+def test_get_task_by_id_success(client, override_current_user, monkeypatch):
     task = Task(
         id=1,
         title="test title",
@@ -204,9 +174,7 @@ def test_get_task_by_id_success(monkeypatch):
         created_at=datetime.now(UTC),
         team_id=2,
     )
-
-    async def fake_get_current_user():
-        return User(id=1)
+    override_current_user(User(id=1))
 
     mock_get_task_by_id_for_user_or_raise = AsyncMock(return_value=task)
     monkeypatch.setattr(
@@ -214,12 +182,9 @@ def test_get_task_by_id_success(monkeypatch):
         "get_task_by_id_for_user_or_raise",
         mock_get_task_by_id_for_user_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.get("/api/v1/tasks/1")
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.get("/api/v1/tasks/1")
+    data = response.json()
 
     assert response.status_code == 200
     assert data["id"] == 1
@@ -235,7 +200,7 @@ def test_get_task_by_id_success(monkeypatch):
     assert current_user.id == 1
 
 
-def test_get_task_by_id_not_found(monkeypatch):
+def test_get_task_by_id_not_found(client, override_current_user, monkeypatch):
     mock_get_task_by_id_for_user_or_raise = AsyncMock(
         side_effect=task_services.TaskNotFoundError()
     )
@@ -244,21 +209,15 @@ def test_get_task_by_id_not_found(monkeypatch):
         "get_task_by_id_for_user_or_raise",
         mock_get_task_by_id_for_user_or_raise,
     )
+    override_current_user(User(id=1))
 
-    async def fake_get_current_user():
-        return User(id=1)
-
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.get("/api/v1/tasks/1")
-    finally:
-        app.dependency_overrides.clear()
+    response = client.get("/api/v1/tasks/1")
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Task not found"
 
 
-def test_get_user_tasks(monkeypatch):
+def test_get_user_tasks(client, override_current_user, monkeypatch):
     tasks = [
         Task(
             id=1,
@@ -281,18 +240,12 @@ def test_get_user_tasks(monkeypatch):
             team_id=2,
         ),
     ]
-
-    async def fake_get_current_user():
-        return User(id=1)
-
-    app.dependency_overrides[get_current_user] = fake_get_current_user
+    override_current_user(User(id=1))
     mock_get_tasks_for_user = AsyncMock(return_value=tasks)
     monkeypatch.setattr(task_services, "get_tasks_for_user", mock_get_tasks_for_user)
-    try:
-        response = client.get("/api/v1/tasks")
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.get("/api/v1/tasks")
+    data = response.json()
 
     assert response.status_code == 200
     assert len(data) == 2
@@ -306,7 +259,7 @@ def test_get_user_tasks(monkeypatch):
     assert current_user.id == 1
 
 
-def test_update_task_success(monkeypatch):
+def test_update_task_success(client, override_current_user, monkeypatch):
     task = Task(
         id=1,
         title="new title",
@@ -321,16 +274,10 @@ def test_update_task_success(monkeypatch):
     monkeypatch.setattr(
         task_services, "update_task_or_raise", mock_update_task_or_raise
     )
+    override_current_user(User(id=1))
 
-    async def fake_get_current_user():
-        return User(id=1)
-
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.patch("/api/v1/tasks/1", json={"title": "new title"})
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+    response = client.patch("/api/v1/tasks/1", json={"title": "new title"})
+    data = response.json()
 
     assert response.status_code == 200
     assert data["title"] == "new title"
@@ -343,20 +290,14 @@ def test_update_task_success(monkeypatch):
     assert current_user.id == 1
 
 
-def test_update_task_not_found(monkeypatch):
+def test_update_task_not_found(client, override_current_user, monkeypatch):
     mock_update_task_or_raise = AsyncMock(side_effect=task_services.TaskNotFoundError())
     monkeypatch.setattr(
         task_services, "update_task_or_raise", mock_update_task_or_raise
     )
+    override_current_user(User(id=1))
 
-    async def fake_get_current_user():
-        return User(id=1)
-
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.patch("/api/v1/tasks/1", json={"title": "new title"})
-    finally:
-        app.dependency_overrides.clear()
+    response = client.patch("/api/v1/tasks/1", json={"title": "new title"})
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Task not found"
@@ -369,22 +310,16 @@ def test_update_task_not_found(monkeypatch):
     assert current_user.id == 1
 
 
-def test_update_task_permission_error(monkeypatch):
+def test_update_task_permission_error(client, override_current_user, monkeypatch):
     mock_update_task_or_raise = AsyncMock(
         side_effect=task_services.TaskPermissionError()
     )
     monkeypatch.setattr(
         task_services, "update_task_or_raise", mock_update_task_or_raise
     )
+    override_current_user(User(id=1))
 
-    async def fake_get_current_user():
-        return User(id=1)
-
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.patch("/api/v1/tasks/1", json={"title": "new title"})
-    finally:
-        app.dependency_overrides.clear()
+    response = client.patch("/api/v1/tasks/1", json={"title": "new title"})
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Not enough permissions"
@@ -397,20 +332,14 @@ def test_update_task_permission_error(monkeypatch):
     assert current_user.id == 1
 
 
-def test_delete_task_success(monkeypatch):
+def test_delete_task_success(client, override_current_user, monkeypatch):
     mock_delete_task_or_raise = AsyncMock(return_value=None)
     monkeypatch.setattr(
         task_services, "delete_task_or_raise", mock_delete_task_or_raise
     )
+    override_current_user(User(id=1))
 
-    async def fake_get_current_user():
-        return User(id=1)
-
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.delete("/api/v1/tasks/1")
-    finally:
-        app.dependency_overrides.clear()
+    response = client.delete("/api/v1/tasks/1")
 
     assert response.status_code == 204
     mock_delete_task_or_raise.assert_awaited_once()
@@ -421,20 +350,14 @@ def test_delete_task_success(monkeypatch):
     assert current_user.id == 1
 
 
-def test_delete_task_not_found_error(monkeypatch):
+def test_delete_task_not_found_error(client, override_current_user, monkeypatch):
     mock_delete_task_or_raise = AsyncMock(side_effect=task_services.TaskNotFoundError())
     monkeypatch.setattr(
         task_services, "delete_task_or_raise", mock_delete_task_or_raise
     )
+    override_current_user(User(id=1))
 
-    async def fake_get_current_user():
-        return User(id=1)
-
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.delete("/api/v1/tasks/1")
-    finally:
-        app.dependency_overrides.clear()
+    response = client.delete("/api/v1/tasks/1")
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Task not found"
@@ -446,22 +369,16 @@ def test_delete_task_not_found_error(monkeypatch):
     assert current_user.id == 1
 
 
-def test_delete_task_permission_error(monkeypatch):
+def test_delete_task_permission_error(client, override_current_user, monkeypatch):
     mock_delete_task_or_raise = AsyncMock(
         side_effect=task_services.TaskPermissionError()
     )
     monkeypatch.setattr(
         task_services, "delete_task_or_raise", mock_delete_task_or_raise
     )
+    override_current_user(User(id=1))
 
-    async def fake_get_current_user():
-        return User(id=1)
-
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.delete("/api/v1/tasks/1")
-    finally:
-        app.dependency_overrides.clear()
+    response = client.delete("/api/v1/tasks/1")
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Not enough permissions"

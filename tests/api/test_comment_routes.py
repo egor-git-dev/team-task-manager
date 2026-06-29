@@ -1,19 +1,13 @@
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
-from fastapi.testclient import TestClient
-
-from app.api.deps import get_current_user
-from app.main import app
 from app.models.comments import Comment
 from app.models.users import User
 from app.services import comments as comment_services
 from app.services import tasks as task_services
 
-client = TestClient(app)
 
-
-def test_create_comment_success(monkeypatch):
+def test_create_comment_success(client, override_current_user, monkeypatch):
     comment = Comment(
         id=1,
         text="test comment",
@@ -21,24 +15,17 @@ def test_create_comment_success(monkeypatch):
         task_id=3,
         created_at=datetime.now(UTC),
     )
-
-    async def fake_get_current_user():
-        return User(id=5)
-
+    override_current_user(User(id=5))
     mock_create_comment = AsyncMock(return_value=comment)
-
     monkeypatch.setattr(comment_services, "create_comment", mock_create_comment)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post(
-            "/api/v1/tasks/3/comments",
-            json={
-                "text": "test comment",
-            },
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.post(
+        "/api/v1/tasks/3/comments",
+        json={
+            "text": "test comment",
+        },
+    )
+    data = response.json()
 
     assert response.status_code == 201
     assert data["text"] == "test comment"
@@ -53,24 +40,20 @@ def test_create_comment_success(monkeypatch):
     assert current_user.id == 5
 
 
-def test_create_comment_task_not_found_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=5)
-
+def test_create_comment_task_not_found_error(
+    client, override_current_user, monkeypatch
+):
+    override_current_user(User(id=5))
     mock_create_comment = AsyncMock(side_effect=task_services.TaskNotFoundError())
-
     monkeypatch.setattr(comment_services, "create_comment", mock_create_comment)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post(
-            "/api/v1/tasks/3/comments",
-            json={
-                "text": "test comment",
-            },
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.post(
+        "/api/v1/tasks/3/comments",
+        json={
+            "text": "test comment",
+        },
+    )
+    data = response.json()
 
     assert response.status_code == 404
     assert data["detail"] == "Task not found"
@@ -84,10 +67,8 @@ def test_create_comment_task_not_found_error(monkeypatch):
     assert current_user.id == 5
 
 
-def test_get_task_comments_success(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=5)
-
+def test_get_task_comments_success(client, override_current_user, monkeypatch):
+    override_current_user(User(id=5))
     comments = [
         Comment(
             id=1,
@@ -117,12 +98,9 @@ def test_get_task_comments_success(monkeypatch):
         "get_task_comments_for_user_or_raise",
         mock_get_task_comments_for_user_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.get("/api/v1/tasks/3/comments")
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.get("/api/v1/tasks/3/comments")
+    data = response.json()
 
     assert response.status_code == 200
     assert len(data) == 3
@@ -137,10 +115,10 @@ def test_get_task_comments_success(monkeypatch):
     assert current_user.id == 5
 
 
-def test_get_task_comments_task_not_found_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=5)
-
+def test_get_task_comments_task_not_found_error(
+    client, override_current_user, monkeypatch
+):
+    override_current_user(User(id=5))
     mock_get_task_comments_for_user_or_raise = AsyncMock(
         side_effect=task_services.TaskNotFoundError()
     )
@@ -149,12 +127,9 @@ def test_get_task_comments_task_not_found_error(monkeypatch):
         "get_task_comments_for_user_or_raise",
         mock_get_task_comments_for_user_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.get("/api/v1/tasks/3/comments")
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.get("/api/v1/tasks/3/comments")
+    data = response.json()
 
     assert response.status_code == 404
     assert data["detail"] == "Task not found"
@@ -167,22 +142,16 @@ def test_get_task_comments_task_not_found_error(monkeypatch):
     assert current_user.id == 5
 
 
-def test_delete_comment_success(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=5)
-
+def test_delete_comment_success(client, override_current_user, monkeypatch):
+    override_current_user(User(id=5))
     mock_delete_comment_or_raise = AsyncMock(return_value=None)
     monkeypatch.setattr(
         comment_services,
         "delete_comment_or_raise",
         mock_delete_comment_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
 
-    try:
-        response = client.delete("/api/v1/tasks/5/comments/2")
-    finally:
-        app.dependency_overrides.clear()
+    response = client.delete("/api/v1/tasks/5/comments/2")
 
     assert response.status_code == 204
     mock_delete_comment_or_raise.assert_awaited_once()
@@ -194,10 +163,8 @@ def test_delete_comment_success(monkeypatch):
     assert current_user.id == 5
 
 
-def test_delete_comment_task_not_found(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=5)
-
+def test_delete_comment_task_not_found(client, override_current_user, monkeypatch):
+    override_current_user(User(id=5))
     mock_delete_comment_or_raise = AsyncMock(
         side_effect=task_services.TaskNotFoundError()
     )
@@ -206,13 +173,9 @@ def test_delete_comment_task_not_found(monkeypatch):
         "delete_comment_or_raise",
         mock_delete_comment_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
 
-    try:
-        response = client.delete("/api/v1/tasks/5/comments/2")
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+    response = client.delete("/api/v1/tasks/5/comments/2")
+    data = response.json()
 
     assert response.status_code == 404
     assert data["detail"] == "Task not found"
@@ -224,10 +187,8 @@ def test_delete_comment_task_not_found(monkeypatch):
     assert current_user.id == 5
 
 
-def test_delete_comment_not_found(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=5)
-
+def test_delete_comment_not_found(client, override_current_user, monkeypatch):
+    override_current_user(User(id=5))
     mock_delete_comment_or_raise = AsyncMock(
         side_effect=comment_services.CommentNotFoundError()
     )
@@ -236,13 +197,9 @@ def test_delete_comment_not_found(monkeypatch):
         "delete_comment_or_raise",
         mock_delete_comment_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
 
-    try:
-        response = client.delete("/api/v1/tasks/5/comments/2")
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+    response = client.delete("/api/v1/tasks/5/comments/2")
+    data = response.json()
 
     assert response.status_code == 404
     assert data["detail"] == "Comment not found"
@@ -254,10 +211,8 @@ def test_delete_comment_not_found(monkeypatch):
     assert current_user.id == 5
 
 
-def test_delete_comment_permission_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=5)
-
+def test_delete_comment_permission_error(client, override_current_user, monkeypatch):
+    override_current_user(User(id=5))
     mock_delete_comment_or_raise = AsyncMock(
         side_effect=comment_services.CommentPermissionError()
     )
@@ -266,13 +221,9 @@ def test_delete_comment_permission_error(monkeypatch):
         "delete_comment_or_raise",
         mock_delete_comment_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
 
-    try:
-        response = client.delete("/api/v1/tasks/5/comments/2")
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+    response = client.delete("/api/v1/tasks/5/comments/2")
+    data = response.json()
 
     assert response.status_code == 403
     assert data["detail"] == "Not enough permissions"

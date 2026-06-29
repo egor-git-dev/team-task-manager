@@ -1,13 +1,14 @@
-from fastapi.testclient import TestClient
 import pytest
 import pytest_asyncio
+from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+import app.models  # noqa: F401
 from app.api.deps import get_current_user
 from app.core.config import settings
 from app.db.base import Base
 from app.main import app
-from app.models import tasks, teams, users, comments, evaluations, meetings  # noqa: F401
+from app.models.users import User
 
 
 @pytest_asyncio.fixture()
@@ -37,3 +38,16 @@ async def async_session():
 @pytest.fixture
 def client():
     return TestClient(app)
+
+
+@pytest.fixture
+def override_current_user():
+    def _override(user: User):
+        async def fake_get_current_user():
+            return user
+
+        app.dependency_overrides[get_current_user] = fake_get_current_user
+
+    yield _override
+
+    app.dependency_overrides.pop(get_current_user, None)

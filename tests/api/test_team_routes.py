@@ -1,31 +1,21 @@
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
-from fastapi.testclient import TestClient
-
-from app.api.deps import get_current_user
-from app.main import app
 from app.models.teams import Team
 from app.models.users import User, UserRole
 from app.services import teams as team_services
 
-client = TestClient(app)
 
-
-def test_create_team_by_manager(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1, role=UserRole.MANAGER)
+def test_create_team_by_manager(client, override_current_user, monkeypatch):
+    override_current_user(User(id=1, role=UserRole.MANAGER))
 
     team = Team(
         id=1, name="test team", join_code="TEST1234", created_at=datetime.now(UTC)
     )
     mock_create_team = AsyncMock(return_value=team)
     monkeypatch.setattr(team_services, "create_team", mock_create_team)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post("/api/v1/teams", json={"name": "test_team"})
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.post("/api/v1/teams", json={"name": "test_team"})
 
     assert response.status_code == 201
     assert response.json()["name"] == "test team"
@@ -37,37 +27,31 @@ def test_create_team_by_manager(monkeypatch):
     mock_create_team.assert_awaited_once()
 
 
-def test_create_team_by_user(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1, role=UserRole.USER)
+def test_create_team_by_user(client, override_current_user, monkeypatch):
+    override_current_user(User(id=1, role=UserRole.USER))
 
     mock_create_team = AsyncMock()
     monkeypatch.setattr(team_services, "create_team", mock_create_team)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post("/api/v1/teams", json={"name": "test_team"})
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.post("/api/v1/teams", json={"name": "test_team"})
+    data = response.json()
 
     assert response.status_code == 403
     assert data["detail"] == "Not enough permissions"
     mock_create_team.assert_not_awaited()
 
 
-def test_create_team_join_code_generation_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1, role=UserRole.ADMIN)
+def test_create_team_join_code_generation_error(
+    client, override_current_user, monkeypatch
+):
+    override_current_user(User(id=1, role=UserRole.ADMIN))
 
     mock_create_team = AsyncMock(
         side_effect=team_services.TeamJoinCodeGenerationError()
     )
     monkeypatch.setattr(team_services, "create_team", mock_create_team)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post("/api/v1/teams", json={"name": "test_team"})
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.post("/api/v1/teams", json={"name": "test_team"})
 
     assert response.status_code == 500
     assert response.json()["detail"] == "Could not generate team join code"
@@ -78,10 +62,8 @@ def test_create_team_join_code_generation_error(monkeypatch):
     mock_create_team.assert_awaited_once()
 
 
-def test_join_team_by_code_success(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1)
-
+def test_join_team_by_code_success(client, override_current_user, monkeypatch):
+    override_current_user(User(id=1))
     updated_user = User(
         id=1,
         email="test@example.com",
@@ -92,12 +74,9 @@ def test_join_team_by_code_success(monkeypatch):
     )
     mock_join_team_by_code = AsyncMock(return_value=updated_user)
     monkeypatch.setattr(team_services, "join_team_by_code", mock_join_team_by_code)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post("/api/v1/teams/join", json={"join_code": "TEST1234"})
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.post("/api/v1/teams/join", json={"join_code": "TEST1234"})
+    data = response.json()
 
     assert response.status_code == 200
     assert data["id"] == 1
@@ -110,17 +89,14 @@ def test_join_team_by_code_success(monkeypatch):
     assert current_user.id == 1
 
 
-def test_join_team_by_code_team_not_found_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1)
-
+def test_join_team_by_code_team_not_found_error(
+    client, override_current_user, monkeypatch
+):
+    override_current_user(User(id=1))
     mock_join_team_by_code = AsyncMock(side_effect=team_services.TeamNotFoundError())
     monkeypatch.setattr(team_services, "join_team_by_code", mock_join_team_by_code)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post("/api/v1/teams/join", json={"join_code": "TEST1234"})
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.post("/api/v1/teams/join", json={"join_code": "TEST1234"})
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Team not found"
@@ -131,19 +107,16 @@ def test_join_team_by_code_team_not_found_error(monkeypatch):
     assert current_user.id == 1
 
 
-def test_join_team_by_code_user_already_in_team_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1)
-
+def test_join_team_by_code_user_already_in_team_error(
+    client, override_current_user, monkeypatch
+):
+    override_current_user(User(id=1))
     mock_join_team_by_code = AsyncMock(
         side_effect=team_services.UserAlreadyInTeamError()
     )
     monkeypatch.setattr(team_services, "join_team_by_code", mock_join_team_by_code)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post("/api/v1/teams/join", json={"join_code": "TEST1234"})
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.post("/api/v1/teams/join", json={"join_code": "TEST1234"})
 
     assert response.status_code == 409
     assert response.json()["detail"] == "User already in team"
@@ -154,10 +127,8 @@ def test_join_team_by_code_user_already_in_team_error(monkeypatch):
     assert current_user.id == 1
 
 
-def test_get_my_team_success(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1)
-
+def test_get_my_team_success(client, override_current_user, monkeypatch):
+    override_current_user(User(id=1))
     team = Team(
         id=2,
         name="test team",
@@ -195,12 +166,9 @@ def test_get_my_team_success(monkeypatch):
         "get_current_user_team_or_raise",
         mock_get_current_user_team_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.get("/api/v1/teams/me")
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.get("/api/v1/teams/me")
+    data = response.json()
 
     assert response.status_code == 200
     assert len(data["users"]) == 3
@@ -211,25 +179,19 @@ def test_get_my_team_success(monkeypatch):
     mock_get_current_user_team_or_raise.assert_awaited_once_with(current_user, db)
 
 
-def test_get_my_team_user_not_in_team(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1)
-
+def test_get_my_team_user_not_in_team(client, override_current_user, monkeypatch):
+    override_current_user(User(id=1))
     mock_get_current_user_team_or_raise = AsyncMock(
         side_effect=team_services.UserNotInTeamError()
     )
-
     monkeypatch.setattr(
         team_services,
         "get_current_user_team_or_raise",
         mock_get_current_user_team_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.get("/api/v1/teams/me")
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.get("/api/v1/teams/me")
+    data = response.json()
 
     assert response.status_code == 409
     assert data["detail"] == "User is not in a team"
@@ -240,25 +202,19 @@ def test_get_my_team_user_not_in_team(monkeypatch):
     mock_get_current_user_team_or_raise.assert_awaited_once()
 
 
-def test_get_my_team_not_found(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1)
-
+def test_get_my_team_not_found(client, override_current_user, monkeypatch):
+    override_current_user(User(id=1))
     mock_get_current_user_team_or_raise = AsyncMock(
         side_effect=team_services.TeamNotFoundError()
     )
-
     monkeypatch.setattr(
         team_services,
         "get_current_user_team_or_raise",
         mock_get_current_user_team_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.get("/api/v1/teams/me")
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.get("/api/v1/teams/me")
+    data = response.json()
 
     assert response.status_code == 404
     assert data["detail"] == "Team not found"
@@ -269,9 +225,8 @@ def test_get_my_team_not_found(monkeypatch):
     mock_get_current_user_team_or_raise.assert_awaited_once()
 
 
-def test_remove_team_member_success(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1, role=UserRole.MANAGER, team_id=2)
+def test_remove_team_member_success(client, override_current_user, monkeypatch):
+    override_current_user(User(id=1, role=UserRole.MANAGER, team_id=2))
 
     mock_remove_team_member_or_raise = AsyncMock()
     monkeypatch.setattr(
@@ -279,11 +234,8 @@ def test_remove_team_member_success(monkeypatch):
         "remove_team_member_or_raise",
         mock_remove_team_member_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.delete("/api/v1/teams/members/5")
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.delete("/api/v1/teams/members/5")
 
     assert response.status_code == 204
     mock_remove_team_member_or_raise.assert_awaited_once()
@@ -296,10 +248,10 @@ def test_remove_team_member_success(monkeypatch):
     assert current_user.team_id == 2
 
 
-def test_remove_team_member_team_permission_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1, role=UserRole.MANAGER, team_id=2)
-
+def test_remove_team_member_team_permission_error(
+    client, override_current_user, monkeypatch
+):
+    override_current_user(User(id=1, role=UserRole.MANAGER, team_id=2))
     mock_remove_team_member_or_raise = AsyncMock(
         side_effect=team_services.TeamPermissionError()
     )
@@ -308,11 +260,8 @@ def test_remove_team_member_team_permission_error(monkeypatch):
         "remove_team_member_or_raise",
         mock_remove_team_member_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.delete("/api/v1/teams/members/5")
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.delete("/api/v1/teams/members/5")
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Not enough permissions"
@@ -326,10 +275,10 @@ def test_remove_team_member_team_permission_error(monkeypatch):
     assert current_user.team_id == 2
 
 
-def test_remove_team_member_user_not_in_team_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1, role=UserRole.MANAGER, team_id=None)
-
+def test_remove_team_member_user_not_in_team_error(
+    client, override_current_user, monkeypatch
+):
+    override_current_user(User(id=1, role=UserRole.MANAGER, team_id=None))
     mock_remove_team_member_or_raise = AsyncMock(
         side_effect=team_services.UserNotInTeamError()
     )
@@ -338,11 +287,8 @@ def test_remove_team_member_user_not_in_team_error(monkeypatch):
         "remove_team_member_or_raise",
         mock_remove_team_member_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.delete("/api/v1/teams/members/5")
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.delete("/api/v1/teams/members/5")
 
     assert response.status_code == 409
     assert response.json()["detail"] == "User is not in a team"
@@ -356,10 +302,12 @@ def test_remove_team_member_user_not_in_team_error(monkeypatch):
     assert current_user.team_id is None
 
 
-def test_remove_team_member_cannot_remove_yourself_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1, role=UserRole.MANAGER, team_id=2)
-
+def test_remove_team_member_cannot_remove_yourself_error(
+    client,
+    override_current_user,
+    monkeypatch,
+):
+    override_current_user(User(id=1, role=UserRole.MANAGER, team_id=2))
     mock_remove_team_member_or_raise = AsyncMock(
         side_effect=team_services.CannotRemoveYourselfError()
     )
@@ -368,11 +316,8 @@ def test_remove_team_member_cannot_remove_yourself_error(monkeypatch):
         "remove_team_member_or_raise",
         mock_remove_team_member_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.delete("/api/v1/teams/members/5")
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.delete("/api/v1/teams/members/5")
 
     assert response.status_code == 409
     assert response.json()["detail"] == "Cannot remove yourself"
@@ -386,10 +331,8 @@ def test_remove_team_member_cannot_remove_yourself_error(monkeypatch):
     assert current_user.team_id == 2
 
 
-def test_remove_team_member_not_found_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1, role=UserRole.MANAGER, team_id=2)
-
+def test_remove_team_member_not_found_error(client, override_current_user, monkeypatch):
+    override_current_user(User(id=1, role=UserRole.MANAGER, team_id=2))
     mock_remove_team_member_or_raise = AsyncMock(
         side_effect=team_services.TeamMemberNotFoundError()
     )
@@ -398,11 +341,8 @@ def test_remove_team_member_not_found_error(monkeypatch):
         "remove_team_member_or_raise",
         mock_remove_team_member_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.delete("/api/v1/teams/members/5")
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.delete("/api/v1/teams/members/5")
 
     assert response.status_code == 404
     assert response.json()["detail"] == "User not found"
@@ -416,9 +356,8 @@ def test_remove_team_member_not_found_error(monkeypatch):
     assert current_user.team_id == 2
 
 
-def test_update_team_member_role_success(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1, role=UserRole.ADMIN, team_id=2)
+def test_update_team_member_role_success(client, override_current_user, monkeypatch):
+    override_current_user(User(id=1, role=UserRole.ADMIN, team_id=2))
 
     member = User(
         id=5,
@@ -434,14 +373,9 @@ def test_update_team_member_role_success(monkeypatch):
         "update_team_member_role_or_raise",
         mock_update_team_member_role_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.patch(
-            "/api/v1/teams/members/5/role", json={"role": "manager"}
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.patch("/api/v1/teams/members/5/role", json={"role": "manager"})
+    data = response.json()
 
     assert response.status_code == 200
     assert data["role"] == "manager"
@@ -456,9 +390,12 @@ def test_update_team_member_role_success(monkeypatch):
     assert current_user.role == UserRole.ADMIN
 
 
-def test_update_team_member_role_by_manager_permission_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1, role=UserRole.MANAGER, team_id=2)
+def test_update_team_member_role_by_manager_permission_error(
+    client,
+    override_current_user,
+    monkeypatch,
+):
+    override_current_user(User(id=1, role=UserRole.MANAGER, team_id=2))
 
     mock_update_team_member_role_or_raise = AsyncMock(
         side_effect=team_services.TeamPermissionError()
@@ -468,14 +405,9 @@ def test_update_team_member_role_by_manager_permission_error(monkeypatch):
         "update_team_member_role_or_raise",
         mock_update_team_member_role_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.patch(
-            "/api/v1/teams/members/5/role", json={"role": "manager"}
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.patch("/api/v1/teams/members/5/role", json={"role": "manager"})
+    data = response.json()
 
     assert response.status_code == 403
     assert data["detail"] == "Not enough permissions"
@@ -490,9 +422,12 @@ def test_update_team_member_role_by_manager_permission_error(monkeypatch):
     assert current_user.role == UserRole.MANAGER
 
 
-def test_update_team_member_role_user_not_in_team_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1, role=UserRole.MANAGER, team_id=None)
+def test_update_team_member_role_user_not_in_team_error(
+    client,
+    override_current_user,
+    monkeypatch,
+):
+    override_current_user(User(id=1, role=UserRole.MANAGER, team_id=None))
 
     mock_update_team_member_role_or_raise = AsyncMock(
         side_effect=team_services.UserNotInTeamError()
@@ -502,14 +437,9 @@ def test_update_team_member_role_user_not_in_team_error(monkeypatch):
         "update_team_member_role_or_raise",
         mock_update_team_member_role_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.patch(
-            "/api/v1/teams/members/5/role", json={"role": "manager"}
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.patch("/api/v1/teams/members/5/role", json={"role": "manager"})
+    data = response.json()
 
     assert response.status_code == 409
     assert data["detail"] == "User is not in a team"
@@ -524,10 +454,12 @@ def test_update_team_member_role_user_not_in_team_error(monkeypatch):
     assert current_user.role == UserRole.MANAGER
 
 
-def test_update_team_member_role_cannot_update_yourself_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1, role=UserRole.ADMIN, team_id=2)
-
+def test_update_team_member_role_cannot_update_yourself_error(
+    client,
+    override_current_user,
+    monkeypatch,
+):
+    override_current_user(User(id=1, role=UserRole.ADMIN, team_id=2))
     mock_update_team_member_role_or_raise = AsyncMock(
         side_effect=team_services.CannotUpdateYourRoleError()
     )
@@ -536,14 +468,9 @@ def test_update_team_member_role_cannot_update_yourself_error(monkeypatch):
         "update_team_member_role_or_raise",
         mock_update_team_member_role_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.patch(
-            "/api/v1/teams/members/1/role", json={"role": "manager"}
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.patch("/api/v1/teams/members/1/role", json={"role": "manager"})
+    data = response.json()
 
     assert response.status_code == 409
     assert data["detail"] == "Cannot update your own role"
@@ -558,9 +485,12 @@ def test_update_team_member_role_cannot_update_yourself_error(monkeypatch):
     assert current_user.role == UserRole.ADMIN
 
 
-def test_update_team_member_role_team_member_not_found(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1, role=UserRole.ADMIN, team_id=2)
+def test_update_team_member_role_team_member_not_found(
+    client,
+    override_current_user,
+    monkeypatch,
+):
+    override_current_user(User(id=1, role=UserRole.ADMIN, team_id=2))
 
     mock_update_team_member_role_or_raise = AsyncMock(
         side_effect=team_services.TeamMemberNotFoundError()
@@ -570,14 +500,9 @@ def test_update_team_member_role_team_member_not_found(monkeypatch):
         "update_team_member_role_or_raise",
         mock_update_team_member_role_or_raise,
     )
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.patch(
-            "/api/v1/teams/members/5/role", json={"role": "manager"}
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.patch("/api/v1/teams/members/5/role", json={"role": "manager"})
+    data = response.json()
 
     assert response.status_code == 404
     assert data["detail"] == "User not found"

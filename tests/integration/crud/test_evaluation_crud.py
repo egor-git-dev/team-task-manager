@@ -111,21 +111,21 @@ async def test_get_user_evaluations(async_session):
     evaluation_data_1 = EvaluationCreate(score=4)
     evaluation_data_2 = EvaluationCreate(score=5)
     evaluation_data_3 = EvaluationCreate(score=3)
-    evaluation_1 = await evaluation_crud.create_evaluation(
+    await evaluation_crud.create_evaluation(
         task_1.id,
         evaluator.id,
         user_1.id,
         evaluation_data_1,
         async_session,
     )
-    evaluation_2 = await evaluation_crud.create_evaluation(
+    await evaluation_crud.create_evaluation(
         task_2.id,
         evaluator.id,
         user_1.id,
         evaluation_data_2,
         async_session,
     )
-    evaluation_3 = await evaluation_crud.create_evaluation(
+    await evaluation_crud.create_evaluation(
         task_3.id,
         evaluator.id,
         user_2.id,

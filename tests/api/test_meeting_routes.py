@@ -1,21 +1,13 @@
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
-from fastapi.testclient import TestClient
-
-from app.api.deps import get_current_user
-from app.main import app
 from app.models.meetings import Meeting
 from app.models.users import User, UserRole
 from app.services import meetings as meeting_services
 
-client = TestClient(app)
 
-
-def test_create_meeting_success(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=2, team_id=1, role=UserRole.MANAGER)
-
+def test_create_meeting_success(client, override_current_user, monkeypatch):
+    override_current_user(User(id=2, team_id=1, role=UserRole.MANAGER))
     starts_at = datetime.now(UTC)
     meeting = Meeting(
         id=1,
@@ -31,21 +23,18 @@ def test_create_meeting_success(monkeypatch):
     )
     mock_create_meeting = AsyncMock(return_value=meeting)
     monkeypatch.setattr(meeting_services, "create_meeting", mock_create_meeting)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post(
-            "/api/v1/meetings",
-            json={
-                "title": "test meeting",
-                "description": "test description",
-                "starts_at": starts_at.isoformat(),
-                "ends_at": (starts_at + timedelta(hours=1)).isoformat(),
-                "participant_id": 5,
-            },
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.post(
+        "/api/v1/meetings",
+        json={
+            "title": "test meeting",
+            "description": "test description",
+            "starts_at": starts_at.isoformat(),
+            "ends_at": (starts_at + timedelta(hours=1)).isoformat(),
+            "participant_id": 5,
+        },
+    )
+    data = response.json()
 
     assert response.status_code == 201
     assert data["title"] == "test meeting"
@@ -57,30 +46,25 @@ def test_create_meeting_success(monkeypatch):
     assert current_user.id == 2
 
 
-def test_create_meeting_permission_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=2, team_id=1, role=UserRole.USER)
-
+def test_create_meeting_permission_error(client, override_current_user, monkeypatch):
+    override_current_user(User(id=2, team_id=1, role=UserRole.USER))
     starts_at = datetime.now(UTC)
     mock_create_meeting = AsyncMock(
         side_effect=meeting_services.MeetingPermissionError()
     )
     monkeypatch.setattr(meeting_services, "create_meeting", mock_create_meeting)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post(
-            "/api/v1/meetings",
-            json={
-                "title": "test meeting",
-                "description": "test description",
-                "starts_at": starts_at.isoformat(),
-                "ends_at": (starts_at + timedelta(hours=1)).isoformat(),
-                "participant_id": 5,
-            },
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.post(
+        "/api/v1/meetings",
+        json={
+            "title": "test meeting",
+            "description": "test description",
+            "starts_at": starts_at.isoformat(),
+            "ends_at": (starts_at + timedelta(hours=1)).isoformat(),
+            "participant_id": 5,
+        },
+    )
+    data = response.json()
 
     assert response.status_code == 403
     assert data["detail"] == "Not enough permissions"
@@ -91,28 +75,22 @@ def test_create_meeting_permission_error(monkeypatch):
     assert current_user.id == 2
 
 
-def test_create_meeting_user_not_in_team(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=2, team_id=1, role=UserRole.MANAGER)
-
+def test_create_meeting_user_not_in_team(client, override_current_user, monkeypatch):
+    override_current_user(User(id=2, team_id=1, role=UserRole.MANAGER))
     starts_at = datetime.now(UTC)
     mock_create_meeting = AsyncMock(side_effect=meeting_services.UserNotInTeamError())
     monkeypatch.setattr(meeting_services, "create_meeting", mock_create_meeting)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post(
-            "/api/v1/meetings",
-            json={
-                "title": "test meeting",
-                "description": "test description",
-                "starts_at": starts_at.isoformat(),
-                "ends_at": (starts_at + timedelta(hours=1)).isoformat(),
-                "participant_id": 5,
-            },
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+    response = client.post(
+        "/api/v1/meetings",
+        json={
+            "title": "test meeting",
+            "description": "test description",
+            "starts_at": starts_at.isoformat(),
+            "ends_at": (starts_at + timedelta(hours=1)).isoformat(),
+            "participant_id": 5,
+        },
+    )
+    data = response.json()
 
     assert response.status_code == 409
     assert data["detail"] == "User is not in a team"
@@ -123,30 +101,27 @@ def test_create_meeting_user_not_in_team(monkeypatch):
     assert current_user.id == 2
 
 
-def test_create_meeting_participant_not_found(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=2, team_id=1, role=UserRole.MANAGER)
-
+def test_create_meeting_participant_not_found(
+    client, override_current_user, monkeypatch
+):
+    override_current_user(User(id=2, team_id=1, role=UserRole.MANAGER))
     starts_at = datetime.now(UTC)
     mock_create_meeting = AsyncMock(
         side_effect=meeting_services.MeetingParticipantNotFoundError()
     )
     monkeypatch.setattr(meeting_services, "create_meeting", mock_create_meeting)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post(
-            "/api/v1/meetings",
-            json={
-                "title": "test meeting",
-                "description": "test description",
-                "starts_at": starts_at.isoformat(),
-                "ends_at": (starts_at + timedelta(hours=1)).isoformat(),
-                "participant_id": 5,
-            },
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+
+    response = client.post(
+        "/api/v1/meetings",
+        json={
+            "title": "test meeting",
+            "description": "test description",
+            "starts_at": starts_at.isoformat(),
+            "ends_at": (starts_at + timedelta(hours=1)).isoformat(),
+            "participant_id": 5,
+        },
+    )
+    data = response.json()
 
     assert response.status_code == 404
     assert data["detail"] == "User not found"
@@ -157,30 +132,26 @@ def test_create_meeting_participant_not_found(monkeypatch):
     assert current_user.id == 2
 
 
-def test_create_meeting_participant_team_mismatch(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=2, team_id=1, role=UserRole.MANAGER)
-
+def test_create_meeting_participant_team_mismatch(
+    client, override_current_user, monkeypatch
+):
+    override_current_user(User(id=2, team_id=1, role=UserRole.MANAGER))
     starts_at = datetime.now(UTC)
     mock_create_meeting = AsyncMock(
         side_effect=meeting_services.MeetingParticipantTeamMismatchError()
     )
     monkeypatch.setattr(meeting_services, "create_meeting", mock_create_meeting)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post(
-            "/api/v1/meetings",
-            json={
-                "title": "test meeting",
-                "description": "test description",
-                "starts_at": starts_at.isoformat(),
-                "ends_at": (starts_at + timedelta(hours=1)).isoformat(),
-                "participant_id": 5,
-            },
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+    response = client.post(
+        "/api/v1/meetings",
+        json={
+            "title": "test meeting",
+            "description": "test description",
+            "starts_at": starts_at.isoformat(),
+            "ends_at": (starts_at + timedelta(hours=1)).isoformat(),
+            "participant_id": 5,
+        },
+    )
+    data = response.json()
 
     assert response.status_code == 409
     assert data["detail"] == "Participant is in other team"
@@ -191,30 +162,24 @@ def test_create_meeting_participant_team_mismatch(monkeypatch):
     assert current_user.id == 2
 
 
-def test_create_meeting_self_booking(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=2, team_id=1, role=UserRole.MANAGER)
-
+def test_create_meeting_self_booking(client, override_current_user, monkeypatch):
+    override_current_user(User(id=2, team_id=1, role=UserRole.MANAGER))
     starts_at = datetime.now(UTC)
     mock_create_meeting = AsyncMock(
         side_effect=meeting_services.MeetingSelfBookingError()
     )
     monkeypatch.setattr(meeting_services, "create_meeting", mock_create_meeting)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post(
-            "/api/v1/meetings",
-            json={
-                "title": "test meeting",
-                "description": "test description",
-                "starts_at": starts_at.isoformat(),
-                "ends_at": (starts_at + timedelta(hours=1)).isoformat(),
-                "participant_id": 5,
-            },
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+    response = client.post(
+        "/api/v1/meetings",
+        json={
+            "title": "test meeting",
+            "description": "test description",
+            "starts_at": starts_at.isoformat(),
+            "ends_at": (starts_at + timedelta(hours=1)).isoformat(),
+            "participant_id": 5,
+        },
+    )
+    data = response.json()
 
     assert response.status_code == 409
     assert data["detail"] == "You cannot be participant"
@@ -225,30 +190,24 @@ def test_create_meeting_self_booking(monkeypatch):
     assert current_user.id == 2
 
 
-def test_create_meeting_time_overlap(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=2, team_id=1, role=UserRole.MANAGER)
-
+def test_create_meeting_time_overlap(client, override_current_user, monkeypatch):
+    override_current_user(User(id=2, team_id=1, role=UserRole.MANAGER))
     starts_at = datetime.now(UTC)
     mock_create_meeting = AsyncMock(
         side_effect=meeting_services.MeetingTimeOverlapError()
     )
     monkeypatch.setattr(meeting_services, "create_meeting", mock_create_meeting)
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.post(
-            "/api/v1/meetings",
-            json={
-                "title": "test meeting",
-                "description": "test description",
-                "starts_at": starts_at.isoformat(),
-                "ends_at": (starts_at + timedelta(hours=1)).isoformat(),
-                "participant_id": 5,
-            },
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+    response = client.post(
+        "/api/v1/meetings",
+        json={
+            "title": "test meeting",
+            "description": "test description",
+            "starts_at": starts_at.isoformat(),
+            "ends_at": (starts_at + timedelta(hours=1)).isoformat(),
+            "participant_id": 5,
+        },
+    )
+    data = response.json()
 
     assert response.status_code == 409
     assert data["detail"] == "Meeting time overlaps with existing meeting"
@@ -259,10 +218,8 @@ def test_create_meeting_time_overlap(monkeypatch):
     assert current_user.id == 2
 
 
-def test_get_my_meetings_success(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=2, team_id=1, role=UserRole.USER)
-
+def test_get_my_meetings_success(client, override_current_user, monkeypatch):
+    override_current_user(User(id=2, team_id=1, role=UserRole.USER))
     starts_at = datetime.now(UTC)
     meetings = [
         Meeting(
@@ -298,12 +255,8 @@ def test_get_my_meetings_success(monkeypatch):
         mock_get_current_user_meetings,
     )
 
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.get("/api/v1/meetings")
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+    response = client.get("/api/v1/meetings")
+    data = response.json()
 
     assert response.status_code == 200
     assert len(data) == 2
@@ -316,10 +269,8 @@ def test_get_my_meetings_success(monkeypatch):
     assert current_user.id == 2
 
 
-def test_cancel_meeting_success(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=2, team_id=1, role=UserRole.MANAGER)
-
+def test_cancel_meeting_success(client, override_current_user, monkeypatch):
+    override_current_user(User(id=2, team_id=1, role=UserRole.MANAGER))
     starts_at = datetime.now(UTC)
     meeting = Meeting(
         id=1,
@@ -337,12 +288,8 @@ def test_cancel_meeting_success(monkeypatch):
     mock_cancel_meeting = AsyncMock(return_value=meeting)
     monkeypatch.setattr(meeting_services, "cancel_meeting", mock_cancel_meeting)
 
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.patch("/api/v1/meetings/1/cancel")
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+    response = client.patch("/api/v1/meetings/1/cancel")
+    data = response.json()
 
     assert response.status_code == 200
     assert data["id"] == 1
@@ -355,19 +302,13 @@ def test_cancel_meeting_success(monkeypatch):
     assert current_user.id == 2
 
 
-def test_cancel_meeting_not_found(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=2, team_id=1, role=UserRole.MANAGER)
-
+def test_cancel_meeting_not_found(client, override_current_user, monkeypatch):
+    override_current_user(User(id=2, team_id=1, role=UserRole.MANAGER))
     mock_cancel_meeting = AsyncMock(side_effect=meeting_services.MeetingNotFoundError())
     monkeypatch.setattr(meeting_services, "cancel_meeting", mock_cancel_meeting)
 
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.patch("/api/v1/meetings/999/cancel")
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+    response = client.patch("/api/v1/meetings/999/cancel")
+    data = response.json()
 
     assert response.status_code == 404
     assert data["detail"] == "Meeting not found"
@@ -379,21 +320,15 @@ def test_cancel_meeting_not_found(monkeypatch):
     assert current_user.id == 2
 
 
-def test_cancel_meeting_permission_error(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=2, team_id=1, role=UserRole.USER)
-
+def test_cancel_meeting_permission_error(client, override_current_user, monkeypatch):
+    override_current_user(User(id=2, team_id=1, role=UserRole.USER))
     mock_cancel_meeting = AsyncMock(
         side_effect=meeting_services.MeetingPermissionError()
     )
     monkeypatch.setattr(meeting_services, "cancel_meeting", mock_cancel_meeting)
 
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.patch("/api/v1/meetings/1/cancel")
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+    response = client.patch("/api/v1/meetings/1/cancel")
+    data = response.json()
 
     assert response.status_code == 403
     assert data["detail"] == "Not enough permissions"

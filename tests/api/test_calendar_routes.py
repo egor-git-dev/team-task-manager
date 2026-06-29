@@ -1,25 +1,16 @@
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
-from fastapi.testclient import TestClient
-
-from app.api.deps import get_current_user
-from app.main import app
 from app.models.meetings import Meeting
 from app.models.tasks import Task, TaskStatus
 from app.models.users import User, UserRole
 from app.services import calendar as calendar_services
 
-client = TestClient(app)
 
-
-def test_get_calendar_success(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1, team_id=10, role=UserRole.USER)
-
+def test_get_calendar_success(client, override_current_user, monkeypatch):
+    override_current_user(User(id=1, team_id=10, role=UserRole.USER))
     starts_at = datetime.now(UTC)
     ends_at = starts_at + timedelta(days=1)
-
     tasks = [
         Task(
             id=1,
@@ -51,18 +42,14 @@ def test_get_calendar_success(monkeypatch):
     mock_get_calendar = AsyncMock(return_value={"tasks": tasks, "meetings": meetings})
     monkeypatch.setattr(calendar_services, "get_calendar", mock_get_calendar)
 
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.get(
-            "/api/v1/calendar",
-            params={
-                "starts_at": starts_at.isoformat(),
-                "ends_at": ends_at.isoformat(),
-            },
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+    response = client.get(
+        "/api/v1/calendar",
+        params={
+            "starts_at": starts_at.isoformat(),
+            "ends_at": ends_at.isoformat(),
+        },
+    )
+    data = response.json()
 
     assert response.status_code == 200
     assert len(data["tasks"]) == 1
@@ -78,28 +65,21 @@ def test_get_calendar_success(monkeypatch):
     assert actual_ends_at == ends_at
 
 
-def test_get_calendar_invalid_range(monkeypatch):
-    async def fake_get_current_user():
-        return User(id=1, team_id=10, role=UserRole.USER)
-
+def test_get_calendar_invalid_range(client, override_current_user, monkeypatch):
+    override_current_user(User(id=1, team_id=10, role=UserRole.USER))
     starts_at = datetime.now(UTC)
     ends_at = starts_at - timedelta(days=1)
-
     mock_get_calendar = AsyncMock()
     monkeypatch.setattr(calendar_services, "get_calendar", mock_get_calendar)
 
-    app.dependency_overrides[get_current_user] = fake_get_current_user
-    try:
-        response = client.get(
-            "/api/v1/calendar",
-            params={
-                "starts_at": starts_at.isoformat(),
-                "ends_at": ends_at.isoformat(),
-            },
-        )
-        data = response.json()
-    finally:
-        app.dependency_overrides.clear()
+    response = client.get(
+        "/api/v1/calendar",
+        params={
+            "starts_at": starts_at.isoformat(),
+            "ends_at": ends_at.isoformat(),
+        },
+    )
+    data = response.json()
 
     assert response.status_code == 400
     assert data["detail"] == "Invalid date range"
