@@ -4,11 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
+from app.models.meetings import Meeting
+from app.models.tasks import Task
 from app.models.users import User
 from app.schemas.calendar import CalendarRead
 from app.services import calendar as calendar_services
-from app.models.meetings import Meeting
-from app.models.tasks import Task
 
 router = APIRouter(prefix="/calendar", tags=["Calendar"])
 

@@ -10,7 +10,6 @@ from app.models.tasks import Task, TaskStatus
 from app.models.users import User, UserRole
 from app.services import calendar as calendar_services
 
-
 client = TestClient(app)
 
 

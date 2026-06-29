@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from sqladmin import Admin
 
+from app.admin.auth import AdminAuth
 from app.admin.views import (
     CommentAdmin,
     EvaluationAdmin,
@@ -10,9 +11,8 @@ from app.admin.views import (
     UserAdmin,
 )
 from app.api.v1.router import api_router as api_v1_router
-from app.db.session import engine
-from app.admin.auth import AdminAuth
 from app.core.config import settings
+from app.db.session import engine
 
 app = FastAPI(
     title="Team Task Manager",
