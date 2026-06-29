@@ -15,6 +15,9 @@ dependencies = [
     "pwdlib[argon2]>=0.2.0",
     "python-jose[cryptography]>=3.3.0",
     "python-multipart>=0.0.9",
+    "sqladmin>=0.20.0",
+    "wtforms<3.2",
+    "itsdangerous>=2.2.0",
 ]
 
 [project.optional-dependencies]

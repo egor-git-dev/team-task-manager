@@ -46,6 +46,9 @@ class User(Base):
         server_default=func.now(),
         nullable=False,
     )
+    is_superuser: Mapped[bool] = mapped_column(
+        default=False, server_default="false", nullable=False
+    )
 
     created_tasks: Mapped[list["Task"]] = relationship(
         back_populates="creator",
