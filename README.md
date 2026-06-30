@@ -1,6 +1,6 @@
 # Team Task Manager
 
-Учебный fullstack-проект для управления командными задачами: пользователи, команды, задачи, комментарии, оценки, встречи, календарь и техническая админка.
+Fullstack pet-проект для управления командной работой: пользователи, команды, задачи, комментарии, оценки выполненных задач, встречи и техническая админка.
 
 ## Стек
 
@@ -8,20 +8,45 @@
 - SQLAlchemy async
 - Alembic
 - PostgreSQL
+- Pydantic
 - JWT auth
 - pytest
+- sqladmin
 - React + TypeScript + Vite
 - Docker Compose
 
-## Переменные окружения
-
-Создайте `.env` из примера:
+## Быстрый запуск
 
 ```bash
+git clone https://github.com/egor-git-dev/team-task-manager.git
+cd team-task-manager
 cp .env.example .env
+docker compose up --build
 ```
 
-Минимально нужно заполнить:
+В другом терминале примените миграции:
+
+```bash
+docker compose exec api alembic upgrade head
+```
+
+Swagger доступен по адресу:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+Админ-панель доступна по адресу:
+
+```text
+http://127.0.0.1:8000/admin
+```
+
+## Переменные окружения
+
+Перед запуском проверьте значения в `.env`.
+
+Минимальный набор переменных:
 
 ```env
 POSTGRES_USER=postgres
@@ -35,7 +60,9 @@ ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
-Для запуска через Docker Compose `POSTGRES_SERVER=localhost` оставляем как есть: внутри контейнера API значение переопределяется на `postgres`.
+По умолчанию в `.env` используется `POSTGRES_SERVER=localhost` — это удобно для локального запуска backend с PostgreSQL из Docker.
+
+При запуске через Docker Compose значение для контейнера API переопределяется на `postgres`, потому что внутри Docker-сети база доступна по имени сервиса `postgres`.
 
 ## Архитектура backend
 
@@ -47,30 +74,6 @@ Backend разделён на слои:
 - `models` — SQLAlchemy-модели;
 - `schemas` — Pydantic-схемы;
 - `core` — настройки, безопасность и общая конфигурация.
-
-## Запуск backend через Docker
-
-```bash
-docker compose up --build
-```
-
-В другом терминале примените миграции:
-
-```bash
-docker compose exec api alembic upgrade head
-```
-
-Проверка:
-
-```bash
-curl http://127.0.0.1:8000/api/v1/health
-```
-
-Swagger:
-
-```text
-http://127.0.0.1:8000/docs
-```
 
 ## Запуск frontend
 
@@ -88,22 +91,56 @@ npm run dev
 http://127.0.0.1:5173/
 ```
 
-Frontend проксирует `/api` на backend `http://127.0.0.1:8000`.
-
 ## Тесты
 
 Для тестов нужен `TEST_DATABASE_URL` в `.env` и отдельная тестовая база PostgreSQL.
 
-То есть для тестов один раз нужно создать БД вручную, например:
+Пример:
+
+```env
+TEST_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/team_task_manager_test
+```
+
+Если в `.env` используется нестандартный внешний порт PostgreSQL, например `POSTGRES_PORT=5433`, то в `TEST_DATABASE_URL` нужно указать этот же порт:
+
+```env
+TEST_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5433/team_task_manager_test
+```
+
+Создать тестовую БД можно командой:
 
 ```bash
 docker compose exec postgres psql -U postgres -c "CREATE DATABASE team_task_manager_test;"
 ```
 
-Запуск:
+Установите backend-зависимости локально, включая dev-зависимости:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+Запуск тестов:
 
 ```bash
 pytest -q
+```
+
+## Покрытие тестами
+
+Последний локальный запуск тестов показал общее покрытие:
+
+```text
+TOTAL: 1232 statements, 64 missed, 95% coverage
+```
+
+Основные API-роуты, схемы, модели и service-слой покрыты тестами на 90–100%.  
+
+Для просмотра отчёта покрытия:
+
+```bash
+pytest --cov=app --cov-report=term-missing
 ```
 
 ## Роли
@@ -113,6 +150,27 @@ pytest -q
 - `admin` — управляет командой: создание команды, код приглашения, роли, удаление участников.
 - `is_superuser` — технический доступ в `/admin`, не бизнес-роль.
 
+## Назначение администратора
+
+После регистрации пользователя роль можно выдать через БД.
+
+Зайти в PostgreSQL:
+
+```bash
+docker compose exec postgres psql -U postgres -d team_task_manager
+```
+
+Сделать пользователя одновременно бизнес-админом и superuser:
+
+```sql
+UPDATE users
+SET role = 'admin',
+    is_superuser = true
+WHERE email = 'user@example.com';
+```
+
+`role = 'admin'` используется в бизнес-логике команд, а `is_superuser = true` нужен только для доступа к технической админке.
+
 ## Возможности
 
 - регистрация и авторизация пользователей через JWT;
@@ -121,7 +179,9 @@ pytest -q
 - создание и назначение задач;
 - комментарии к задачам;
 - оценки выполненных задач;
+- вывод средней оценки пользователя;
 - встречи между участниками команды;
+- отображение задач и встреч в календаре;
 - техническая админка для управления данными.
 
 ## Основные сценарии
@@ -134,15 +194,11 @@ pytest -q
 6. Исполнитель меняет статус задачи.
 7. Участники обсуждают задачу в комментариях.
 8. Manager/Admin оценивает выполненную задачу.
+9. Пользователь видит свои оценки и средний балл.
+10. Пользователь просматривает свои задачи и встречи в календаре.
 
 ## Админка
 
-Админ-панель доступна по адресу:
-
-```text
-http://127.0.0.1:8000/admin
-```
-
-Доступ разрешён только пользователям с `is_superuser = true`.
+Доступ в `/admin` разрешён только пользователям с `is_superuser = true`.
 
 Админка используется для технического управления существующими данными. Основные бизнес-сценарии необходимо проверять через API или frontend.
