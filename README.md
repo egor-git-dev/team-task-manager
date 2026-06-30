@@ -42,6 +42,25 @@ http://127.0.0.1:8000/docs
 http://127.0.0.1:8000/admin
 ```
 
+## Makefile
+
+Для удобства основные команды проекта вынесены в `Makefile`:
+
+```bash
+make run            # запустить backend через Docker Compose с пересборкой image
+make up             # обычный повторный запуск backend
+make down           # остановить контейнеры
+make clean          # остановить контейнеры и удалить volume с базой
+make migrate        # применить миграции
+make health         # проверить health endpoint
+make psql           # зайти в PostgreSQL
+make test-database  # создать тестовую базу данных
+make install-deps   # установить backend-зависимости с dev-зависимостями
+make test           # запустить тесты
+make coverage       # запустить тесты с coverage
+make frontend       # запустить frontend
+```
+
 ## Переменные окружения
 
 Перед запуском проверьте значения в `.env`.
