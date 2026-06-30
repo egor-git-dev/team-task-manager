@@ -45,7 +45,7 @@ def test_register_user_with_existing_email(client, monkeypatch):
     assert response.json()["detail"] == "User already exists"
 
 
-def test_get_user_by_id(client, monkeypatch):
+def test_get_user_by_id(client, override_current_user, monkeypatch):
     async def fake_get_user_by_id_or_raise(user_id, db):
         return {
             "id": user_id,
@@ -61,6 +61,7 @@ def test_get_user_by_id(client, monkeypatch):
         "get_user_by_id_or_raise",
         fake_get_user_by_id_or_raise,
     )
+    override_current_user(User(id=1))
     response = client.get("/api/v1/users/1")
     data = response.json()
 
@@ -71,7 +72,7 @@ def test_get_user_by_id(client, monkeypatch):
     assert "hashed_password" not in data
 
 
-def test_get_user_by_id_not_found(client, monkeypatch):
+def test_get_user_by_id_not_found(client, override_current_user, monkeypatch):
     async def fake_get_user_by_id_or_raise(user_id, db):
         raise user_services.UserNotFoundError()
 
@@ -80,6 +81,8 @@ def test_get_user_by_id_not_found(client, monkeypatch):
         "get_user_by_id_or_raise",
         fake_get_user_by_id_or_raise,
     )
+    override_current_user(User(id=1))
+
     response = client.get("/api/v1/users/1")
 
     assert response.status_code == 404

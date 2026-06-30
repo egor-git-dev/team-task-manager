@@ -29,7 +29,11 @@ async def get_me(current_user: User = Depends(get_current_user)) -> User:
 
 
 @router.get("/{user_id}", response_model=UserRead, status_code=status.HTTP_200_OK)
-async def get_user_by_id(user_id: int, db: AsyncSession = Depends(get_db)) -> User:
+async def get_user_by_id(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
     try:
         return await user_services.get_user_by_id_or_raise(user_id, db)
     except user_services.UserNotFoundError:
