@@ -11,6 +11,8 @@ from app.main import app
 from app.models.users import User
 
 
+# Для интеграционных тестов создаём таблицы с нуля,
+# а после теста удаляем, чтобы сценарии не влияли друг на друга.
 @pytest_asyncio.fixture()
 async def async_session():
     if settings.test_database_url is None:

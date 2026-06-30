@@ -8,6 +8,8 @@ from app.models.teams import Team
 from app.models.users import User
 
 
+# В админке оставляем редактирование существующих данных.
+# Создание бизнес-объектов идёт через API, где срабатывают проверки сервисов.
 class UserAdmin(ModelView, model=User):
     can_create = False
     column_list = [

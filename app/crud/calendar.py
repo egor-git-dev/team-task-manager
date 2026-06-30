@@ -13,6 +13,8 @@ async def get_user_calendar_tasks(
     ends_at: datetime,
     db: AsyncSession,
 ) -> list[Task]:
+    # Используем полуоткрытый интервал [starts_at, ends_at),
+    # чтобы события на границе не попадали сразу в два периода.
     query = (
         select(Task)
         .where(

@@ -1,7 +1,7 @@
 [project]
 name = "team-task-manager"
 version = "0.1.0"
-description = "Final FastAPI learning project"
+description = "FastAPI backend for team task management with roles, comments, meetings, evaluations, and admin panel"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",

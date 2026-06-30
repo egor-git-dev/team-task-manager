@@ -57,6 +57,8 @@ async def create_team(
 ) -> Team:
     if current_user.role != UserRole.ADMIN:
         raise TeamPermissionError()
+    # Код приглашения генерируется случайно, поэтому на всякий случай
+    # проверяем коллизии и делаем несколько попыток.
     for _ in range(JOIN_CODE_GENERATION_ATTEMPTS):
         join_code = generate_join_code()
         if await team_crud.get_team_by_join_code(join_code, db) is None:
@@ -113,6 +115,8 @@ async def update_team_member_role_or_raise(
         raise TeamPermissionError()
     if current_user.team_id is None:
         raise UserNotInTeamError()
+    # Админ не может убрать или понизить сам себя,
+    # чтобы случайно не оставить команду без управления.
     if current_user.id == member_id:
         raise CannotUpdateYourRoleError()
     member = await user_crud.get_user_by_id(member_id, db)

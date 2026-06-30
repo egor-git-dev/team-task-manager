@@ -40,6 +40,8 @@ async def get_task_by_id_for_user_or_raise(
     task = await task_crud.get_task_by_id(task_id, db)
     if task is None:
         raise TaskNotFoundError()
+    # Чужие задачи маскируем как 404: так пользователь не узнает,
+    # существует ли задача в другой команде.
     if current_user.team_id != task.team_id:
         raise TaskNotFoundError()
     if current_user.id == task.creator_id or current_user.id == task.assignee_id:
@@ -96,6 +98,8 @@ async def update_task_or_raise(
     update_fields = set(update_data)
     if current_user.team_id != task.team_id:
         raise TaskNotFoundError()
+    # Если меняем исполнителя, проверяем его отдельно:
+    # задача не должна перейти пользователю из другой команды.
     if "assignee_id" in update_data and update_data["assignee_id"] is not None:
         assignee = await user_crud.get_user_by_id(update_data["assignee_id"], db)
         if assignee is None:
@@ -106,6 +110,8 @@ async def update_task_or_raise(
         return await task_crud.update_task(task, task_data, db)
     if current_user.role in {UserRole.MANAGER, UserRole.ADMIN}:
         return await task_crud.update_task(task, task_data, db)
+    # Исполнитель может двигать свою задачу по статусам,
+    # но не менять описание, дедлайн или назначение.
     if current_user.id == task.assignee_id:
         if update_fields <= {"status"}:
             return await task_crud.update_task(task, task_data, db)

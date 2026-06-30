@@ -51,6 +51,8 @@ async def create_meeting(
         raise MeetingParticipantTeamMismatchError()
     if current_user.id == participant.id:
         raise MeetingSelfBookingError()
+    # Проверяем занятость обоих участников: встреча один-на-один
+    # не должна пересекаться ни у организатора, ни у приглашённого.
     if await meeting_crud.has_time_overlap(
         participant.id, meeting_data.starts_at, meeting_data.ends_at, db
     ):

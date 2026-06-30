@@ -58,6 +58,8 @@ async def has_time_overlap(
     ends_at: datetime,
     db: AsyncSession,
 ) -> bool:
+    # Два интервала пересекаются, если начало одного раньше конца другого,
+    # а конец одного позже начала другого.
     query = select(Meeting).where(
         Meeting.participant_id == participant_id,
         Meeting.is_cancelled.is_(False),
