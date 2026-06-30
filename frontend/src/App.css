@@ -402,6 +402,12 @@ textarea:focus {
   padding: 10px 16px;
 }
 
+.compact-button {
+  min-height: 34px;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
 .danger-button {
   background: #a33b2f;
   color: #ffffff;
@@ -470,6 +476,10 @@ th {
   text-transform: uppercase;
 }
 
+.selected-row {
+  background: #f4f8fb;
+}
+
 td strong,
 td span {
   display: block;
@@ -508,6 +518,50 @@ td span {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.comments-panel {
+  margin-top: 18px;
+  border-top: 1px solid #e4ebf2;
+  padding-top: 18px;
+}
+
+.comment-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+
+.comment-list {
+  display: grid;
+  gap: 10px;
+}
+
+.comment-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid #e4ebf2;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.comment-item strong,
+.comment-item span {
+  display: block;
+}
+
+.comment-item span {
+  color: #6b7787;
+  font-size: 13px;
+  margin-top: 3px;
+}
+
+.comment-item p {
+  margin: 8px 0 0;
+  line-height: 1.45;
 }
 
 .empty-state,
@@ -624,5 +678,9 @@ td span {
 
   .panel {
     padding: 14px;
+  }
+
+  .comment-form {
+    grid-template-columns: 1fr;
   }
 }

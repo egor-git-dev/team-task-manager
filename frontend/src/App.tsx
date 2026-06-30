@@ -26,6 +26,7 @@ import type {
   EvaluationAverage,
   Meeting,
   Task,
+  TaskComment,
   TaskStatus,
   TeamWithMembers,
   User,
@@ -79,6 +80,7 @@ function getErrorMessage(error: unknown, fallback: string) {
     'User is inactive': 'Аккаунт отключён.',
     'User is not in a team': 'Сначала нужно вступить в команду.',
     'Task not found': 'Задача не найдена.',
+    'Comment not found': 'Комментарий не найден.',
     'Permission denied': 'Недостаточно прав для этого действия.',
     'Team not found': 'Команда не найдена.',
     'Join code not found': 'Команда с таким кодом не найдена.',
@@ -495,6 +497,10 @@ function TasksPage({
   const [tasks, setTasks] = useState<Task[]>([])
   const [members, setMembers] = useState<User[]>([])
   const [form, setForm] = useState(emptyTaskForm)
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [comments, setComments] = useState<TaskComment[]>([])
+  const [commentText, setCommentText] = useState('')
+  const [loadingComments, setLoadingComments] = useState(false)
   const [loading, setLoading] = useState(true)
   const canCreate = user.role === 'manager' || user.role === 'admin'
 
@@ -559,9 +565,68 @@ function TasksPage({
     }
   }
 
+  async function openComments(task: Task) {
+    if (selectedTask?.id === task.id) {
+      setSelectedTask(null)
+      setComments([])
+      setCommentText('')
+      return
+    }
+
+    setSelectedTask(task)
+    setCommentText('')
+    setLoadingComments(true)
+    try {
+      setComments(await api.listTaskComments(token, task.id))
+    } catch (error) {
+      notify(getErrorMessage(error, 'Не удалось загрузить комментарии.'))
+    } finally {
+      setLoadingComments(false)
+    }
+  }
+
+  async function reloadComments(taskId: number) {
+    setLoadingComments(true)
+    try {
+      setComments(await api.listTaskComments(token, taskId))
+    } catch (error) {
+      notify(getErrorMessage(error, 'Не удалось загрузить комментарии.'))
+    } finally {
+      setLoadingComments(false)
+    }
+  }
+
+  async function createComment(event: FormEvent) {
+    event.preventDefault()
+    if (!selectedTask || !commentText.trim()) return
+
+    try {
+      await api.createTaskComment(token, selectedTask.id, commentText.trim())
+      setCommentText('')
+      await reloadComments(selectedTask.id)
+    } catch (error) {
+      notify(getErrorMessage(error, 'Не удалось добавить комментарий.'))
+    }
+  }
+
+  async function deleteComment(comment: TaskComment) {
+    if (!selectedTask) return
+
+    try {
+      await api.deleteTaskComment(token, selectedTask.id, comment.id)
+      await reloadComments(selectedTask.id)
+    } catch (error) {
+      notify(getErrorMessage(error, 'Не удалось удалить комментарий.'))
+    }
+  }
+
   async function deleteTask(task: Task) {
     try {
       await api.deleteTask(token, task.id)
+      if (selectedTask?.id === task.id) {
+        setSelectedTask(null)
+        setComments([])
+      }
       notify('Задача удалена.')
       await loadTasks()
     } catch (error) {
@@ -644,12 +709,78 @@ function TasksPage({
         </div>
         <TaskTable
           members={members}
+          selectedTaskId={selectedTask?.id ?? null}
           tasks={tasks}
           onAssigneeChange={canCreate ? updateAssignee : undefined}
+          onCommentsOpen={openComments}
           onDelete={deleteTask}
           onEvaluate={canCreate ? evaluateTask : undefined}
           onStatusChange={updateStatus}
         />
+        {selectedTask ? (
+          <div className="comments-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Комментарии</h2>
+                <p>{selectedTask.title}</p>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => reloadComments(selectedTask.id)}
+                title="Обновить"
+              >
+                <RefreshCcw size={18} />
+              </button>
+            </div>
+
+            <form className="comment-form" onSubmit={createComment}>
+              <textarea
+                value={commentText}
+                onChange={(event) => setCommentText(event.target.value)}
+                placeholder="Напишите комментарий"
+                rows={3}
+                required
+              />
+              <button className="primary-button" type="submit">
+                Добавить
+              </button>
+            </form>
+
+            <div className="comment-list">
+              {loadingComments ? (
+                <p className="empty-state">Загружаем комментарии...</p>
+              ) : comments.length === 0 ? (
+                <p className="empty-state">Комментариев пока нет.</p>
+              ) : (
+                comments.map((comment) => {
+                  const author = members.find((member) => member.id === comment.author_id)
+                  const canDeleteComment = canCreate || comment.author_id === user.id
+
+                  return (
+                    <article className="comment-item" key={comment.id}>
+                      <div>
+                        <strong>{author?.email ?? `Пользователь #${comment.author_id}`}</strong>
+                        <span>{formatDate(comment.created_at)}</span>
+                        <p>{comment.text}</p>
+                      </div>
+                      {canDeleteComment ? (
+                        <button
+                          className="icon-button danger"
+                          type="button"
+                          onClick={() => deleteComment(comment)}
+                          title="Удалить комментарий"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      ) : null}
+                    </article>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        ) : null}
       </section>
     </section>
   )
@@ -659,17 +790,21 @@ function TaskTable({
   compact = false,
   members = [],
   onAssigneeChange,
+  onCommentsOpen,
   onDelete,
   onEvaluate,
   onStatusChange,
+  selectedTaskId,
   tasks,
 }: {
   compact?: boolean
   members?: User[]
   onAssigneeChange?: (task: Task, assigneeId: number | null) => void
+  onCommentsOpen?: (task: Task) => void
   onDelete?: (task: Task) => void
   onEvaluate?: (task: Task, score: number) => void
   onStatusChange?: (task: Task, status: TaskStatus) => void
+  selectedTaskId?: number | null
   tasks: Task[]
 }) {
   if (tasks.length === 0) {
@@ -690,7 +825,7 @@ function TaskTable({
         </thead>
         <tbody>
           {tasks.map((task) => (
-            <tr key={task.id}>
+            <tr className={selectedTaskId === task.id ? 'selected-row' : ''} key={task.id}>
               <td>
                 <strong>{task.title}</strong>
                 {!compact && task.description ? <span>{task.description}</span> : null}
@@ -742,6 +877,15 @@ function TaskTable({
               {!compact ? (
                 <td>
                   <div className="row-actions">
+                    {onCommentsOpen ? (
+                      <button
+                        className="secondary-button compact-button"
+                        type="button"
+                        onClick={() => onCommentsOpen(task)}
+                      >
+                        Комментарии
+                      </button>
+                    ) : null}
                     {onEvaluate && task.status === 'done' ? (
                       <select
                         defaultValue=""
@@ -1184,7 +1328,7 @@ function CalendarPage({
         <div className="panel-heading full">
           <div>
             <h2>Создать встречу</h2>
-            <p>Менеджеры и администраторы могут планировать командные встречи.</p>
+            <p>Менеджеры и администраторы могут запланировать встречу один-на-один с участником команды.</p>
           </div>
         </div>
         <label>

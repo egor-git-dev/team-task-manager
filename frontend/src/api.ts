@@ -63,6 +63,14 @@ export type EvaluationAverage = {
   evaluations_count: number
 }
 
+export type TaskComment = {
+  id: number
+  task_id: number
+  author_id: number
+  text: string
+  created_at: string
+}
+
 export class ApiError extends Error {
   status: number
 
@@ -191,6 +199,25 @@ export const api = {
 
   deleteTask(token: string, taskId: number) {
     return request<void>(`/tasks/${taskId}`, {
+      token,
+      method: 'DELETE',
+    })
+  },
+
+  listTaskComments(token: string, taskId: number) {
+    return request<TaskComment[]>(`/tasks/${taskId}/comments`, { token })
+  },
+
+  createTaskComment(token: string, taskId: number, text: string) {
+    return request<TaskComment>(`/tasks/${taskId}/comments`, {
+      token,
+      method: 'POST',
+      body: { text },
+    })
+  },
+
+  deleteTaskComment(token: string, taskId: number, commentId: number) {
+    return request<void>(`/tasks/${taskId}/comments/${commentId}`, {
       token,
       method: 'DELETE',
     })
