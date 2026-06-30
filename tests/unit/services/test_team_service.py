@@ -18,17 +18,22 @@ def test_generate_join_code():
 
 @pytest.mark.asyncio
 async def test_create_team_with_first_generated_code(monkeypatch):
-    team = Team(name="test team")
+    current_user = User(id=1, role=UserRole.ADMIN)
+    team = Team(id=1, name="test team")
     mock_get_team_by_join_code = AsyncMock(return_value=None)
     mock_create_team = AsyncMock(return_value=team)
+    mock_update_user_team = AsyncMock(return_value=current_user)
     monkeypatch.setattr(
         team_services.team_crud, "get_team_by_join_code", mock_get_team_by_join_code
     )
     monkeypatch.setattr(team_services.team_crud, "create_team", mock_create_team)
+    monkeypatch.setattr(
+        team_services.user_crud, "update_user_team", mock_update_user_team
+    )
 
     team_data = TeamCreate(name="test team")
     db = AsyncMock(spec=AsyncSession)
-    result = await team_services.create_team(team_data, db)
+    result = await team_services.create_team(team_data, current_user, db)
 
     assert result.name == "test team"
     await_args = mock_get_team_by_join_code.await_args
@@ -36,11 +41,13 @@ async def test_create_team_with_first_generated_code(monkeypatch):
     join_code, db = await_args.args
     mock_get_team_by_join_code.assert_awaited_once_with(join_code, db)
     mock_create_team.assert_awaited_once()
+    mock_update_user_team.assert_awaited_once_with(current_user, team.id, db)
 
 
 @pytest.mark.asyncio
 async def test_create_team_if_first_generated_code_busy(monkeypatch):
-    team = Team(name="test team")
+    current_user = User(id=1, role=UserRole.ADMIN)
+    team = Team(id=1, name="test team")
     codes = iter(["BUSY1234", "FREE1234"])
     mock_get_team_by_join_code = AsyncMock(
         side_effect=[
@@ -49,6 +56,7 @@ async def test_create_team_if_first_generated_code_busy(monkeypatch):
         ]
     )
     mock_create_team = AsyncMock(return_value=team)
+    mock_update_user_team = AsyncMock(return_value=current_user)
 
     def fake_generate_join_code():
         return next(codes)
@@ -58,14 +66,18 @@ async def test_create_team_if_first_generated_code_busy(monkeypatch):
     )
     monkeypatch.setattr(team_services, "generate_join_code", fake_generate_join_code)
     monkeypatch.setattr(team_services.team_crud, "create_team", mock_create_team)
+    monkeypatch.setattr(
+        team_services.user_crud, "update_user_team", mock_update_user_team
+    )
 
     team_data = TeamCreate(name="test team")
     db = AsyncMock(spec=AsyncSession)
-    result = await team_services.create_team(team_data, db)
+    result = await team_services.create_team(team_data, current_user, db)
 
     assert result.name == "test team"
     assert mock_get_team_by_join_code.await_count == 2
     mock_create_team.assert_awaited_once_with(team_data, "FREE1234", db)
+    mock_update_user_team.assert_awaited_once_with(current_user, team.id, db)
     mock_get_team_by_join_code.assert_has_awaits(
         [
             call("BUSY1234", db),
@@ -76,20 +88,26 @@ async def test_create_team_if_first_generated_code_busy(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_create_team_generate_code_error(monkeypatch):
+    current_user = User(id=1, role=UserRole.ADMIN)
     mock_get_team_by_join_code = AsyncMock(return_value=object())
+    mock_update_user_team = AsyncMock()
     monkeypatch.setattr(
         team_services.team_crud, "get_team_by_join_code", mock_get_team_by_join_code
+    )
+    monkeypatch.setattr(
+        team_services.user_crud, "update_user_team", mock_update_user_team
     )
     team_data = TeamCreate(name="test team")
     db = AsyncMock(spec=AsyncSession)
 
     with pytest.raises(team_services.TeamJoinCodeGenerationError):
-        await team_services.create_team(team_data, db)
+        await team_services.create_team(team_data, current_user, db)
     mock_get_team_by_join_code.assert_awaited()
     assert (
         mock_get_team_by_join_code.await_count
         == team_services.JOIN_CODE_GENERATION_ATTEMPTS
     )
+    mock_update_user_team.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -200,7 +218,7 @@ async def test_get_current_user_team_or_raise_team_not_found(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_remove_team_member_or_raise_success_by_manager(monkeypatch):
+async def test_remove_team_member_or_raise_success_by_admin(monkeypatch):
     mock_update_user_team = AsyncMock()
     monkeypatch.setattr(
         team_services.user_crud,
@@ -214,7 +232,7 @@ async def test_remove_team_member_or_raise_success_by_manager(monkeypatch):
         "get_user_by_id",
         mock_get_user_by_id,
     )
-    current_user = User(id=1, role=UserRole.MANAGER, team_id=1)
+    current_user = User(id=1, role=UserRole.ADMIN, team_id=1)
     db = AsyncMock(spec=AsyncSession)
 
     result = await team_services.remove_team_member_or_raise(
@@ -252,7 +270,7 @@ async def test_remove_team_member_or_raise_by_regular_user_error(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_remove_team_member_or_raise_by_manager_not_in_team(monkeypatch):
+async def test_remove_team_member_or_raise_by_admin_not_in_team(monkeypatch):
     mock_update_user_team = AsyncMock()
     monkeypatch.setattr(
         team_services.user_crud,
@@ -266,7 +284,7 @@ async def test_remove_team_member_or_raise_by_manager_not_in_team(monkeypatch):
         "get_user_by_id",
         mock_get_user_by_id,
     )
-    current_user = User(id=1, role=UserRole.MANAGER, team_id=None)
+    current_user = User(id=1, role=UserRole.ADMIN, team_id=None)
     db = AsyncMock(spec=AsyncSession)
 
     with pytest.raises(team_services.UserNotInTeamError):
@@ -291,7 +309,7 @@ async def test_remove_team_member_or_raise_cannot_remove_yourself(monkeypatch):
         "get_user_by_id",
         mock_get_user_by_id,
     )
-    current_user = User(id=1, role=UserRole.MANAGER, team_id=1)
+    current_user = User(id=1, role=UserRole.ADMIN, team_id=1)
     db = AsyncMock(spec=AsyncSession)
 
     with pytest.raises(team_services.CannotRemoveYourselfError):
@@ -316,7 +334,7 @@ async def test_remove_team_member_or_raise_member_not_found(monkeypatch):
         "get_user_by_id",
         mock_get_user_by_id,
     )
-    current_user = User(id=1, role=UserRole.MANAGER, team_id=1)
+    current_user = User(id=1, role=UserRole.ADMIN, team_id=1)
     db = AsyncMock(spec=AsyncSession)
 
     with pytest.raises(team_services.TeamMemberNotFoundError):
@@ -341,7 +359,7 @@ async def test_remove_team_member_or_raise_member_from_another_team(monkeypatch)
         "get_user_by_id",
         mock_get_user_by_id,
     )
-    current_user = User(id=1, role=UserRole.MANAGER, team_id=1)
+    current_user = User(id=1, role=UserRole.ADMIN, team_id=1)
     db = AsyncMock(spec=AsyncSession)
 
     with pytest.raises(team_services.TeamMemberNotFoundError):

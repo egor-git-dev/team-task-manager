@@ -3,10 +3,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
 from app.models.teams import Team
-from app.models.users import User, UserRole
+from app.models.users import User
 from app.schemas.teams import (
     TeamCreate,
     TeamJoin,
+    TeamJoinCodeRead,
     TeamWithJoinCodeRead,
     TeamWithMembersRead,
 )
@@ -24,12 +25,13 @@ async def create_team(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Team:
-    if current_user.role not in {UserRole.MANAGER, UserRole.ADMIN}:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions"
-        )
     try:
-        return await team_services.create_team(team_data, db)
+        return await team_services.create_team(team_data, current_user, db)
+    except team_services.TeamPermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions",
+        )
     except team_services.TeamJoinCodeGenerationError:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -139,4 +141,31 @@ async def update_team_member_role(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
+        )
+
+
+@router.get("/me/join-code", response_model=TeamJoinCodeRead)
+async def get_my_team_join_code(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Team:
+    try:
+        return await team_services.get_current_user_team_join_code_or_raise(
+            current_user,
+            db,
+        )
+    except team_services.TeamPermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions",
+        )
+    except team_services.UserNotInTeamError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User is not in a team",
+        )
+    except team_services.TeamNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Team not found",
         )

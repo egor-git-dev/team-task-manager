@@ -6,8 +6,8 @@ from app.models.users import User, UserRole
 from app.services import teams as team_services
 
 
-def test_create_team_by_manager(client, override_current_user, monkeypatch):
-    override_current_user(User(id=1, role=UserRole.MANAGER))
+def test_create_team_by_admin(client, override_current_user, monkeypatch):
+    override_current_user(User(id=1, role=UserRole.ADMIN))
 
     team = Team(
         id=1, name="test team", join_code="TEST1234", created_at=datetime.now(UTC)
@@ -21,8 +21,9 @@ def test_create_team_by_manager(client, override_current_user, monkeypatch):
     assert response.json()["name"] == "test team"
     await_args = mock_create_team.await_args
     assert await_args is not None
-    team_data, db = await_args.args
+    team_data, current_user, db = await_args.args
     assert team_data.name == "test_team"
+    assert current_user.role == UserRole.ADMIN
     assert response.json()["join_code"] == "TEST1234"
     mock_create_team.assert_awaited_once()
 
@@ -30,7 +31,7 @@ def test_create_team_by_manager(client, override_current_user, monkeypatch):
 def test_create_team_by_user(client, override_current_user, monkeypatch):
     override_current_user(User(id=1, role=UserRole.USER))
 
-    mock_create_team = AsyncMock()
+    mock_create_team = AsyncMock(side_effect=team_services.TeamPermissionError())
     monkeypatch.setattr(team_services, "create_team", mock_create_team)
 
     response = client.post("/api/v1/teams", json={"name": "test_team"})
@@ -38,7 +39,7 @@ def test_create_team_by_user(client, override_current_user, monkeypatch):
 
     assert response.status_code == 403
     assert data["detail"] == "Not enough permissions"
-    mock_create_team.assert_not_awaited()
+    mock_create_team.assert_awaited_once()
 
 
 def test_create_team_join_code_generation_error(
@@ -57,7 +58,8 @@ def test_create_team_join_code_generation_error(
     assert response.json()["detail"] == "Could not generate team join code"
     await_args = mock_create_team.await_args
     assert await_args is not None
-    team_data, db = await_args.args
+    team_data, current_user, db = await_args.args
+    assert current_user.role == UserRole.ADMIN
     assert team_data.name == "test_team"
     mock_create_team.assert_awaited_once()
 
@@ -223,6 +225,104 @@ def test_get_my_team_not_found(client, override_current_user, monkeypatch):
     current_user, db = await_args.args
     assert current_user.id == 1
     mock_get_current_user_team_or_raise.assert_awaited_once()
+
+
+def test_get_my_team_join_code_success(client, override_current_user, monkeypatch):
+    override_current_user(User(id=1, role=UserRole.ADMIN, team_id=2))
+    team = Team(
+        id=2,
+        name="test team",
+        join_code="TEST1234",
+        created_at=datetime.now(UTC),
+    )
+    mock_get_current_user_team_join_code_or_raise = AsyncMock(return_value=team)
+    monkeypatch.setattr(
+        team_services,
+        "get_current_user_team_join_code_or_raise",
+        mock_get_current_user_team_join_code_or_raise,
+    )
+
+    response = client.get("/api/v1/teams/me/join-code")
+    data = response.json()
+
+    assert response.status_code == 200
+    assert data["join_code"] == "TEST1234"
+    await_args = mock_get_current_user_team_join_code_or_raise.await_args
+    assert await_args is not None
+    current_user, db = await_args.args
+    assert current_user.id == 1
+    assert current_user.role == UserRole.ADMIN
+    assert current_user.team_id == 2
+    mock_get_current_user_team_join_code_or_raise.assert_awaited_once_with(
+        current_user,
+        db,
+    )
+
+
+def test_get_my_team_join_code_permission_error(
+    client,
+    override_current_user,
+    monkeypatch,
+):
+    override_current_user(User(id=1, role=UserRole.MANAGER, team_id=2))
+    mock_get_current_user_team_join_code_or_raise = AsyncMock(
+        side_effect=team_services.TeamPermissionError()
+    )
+    monkeypatch.setattr(
+        team_services,
+        "get_current_user_team_join_code_or_raise",
+        mock_get_current_user_team_join_code_or_raise,
+    )
+
+    response = client.get("/api/v1/teams/me/join-code")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Not enough permissions"
+    mock_get_current_user_team_join_code_or_raise.assert_awaited_once()
+
+
+def test_get_my_team_join_code_user_not_in_team(
+    client,
+    override_current_user,
+    monkeypatch,
+):
+    override_current_user(User(id=1, role=UserRole.ADMIN, team_id=None))
+    mock_get_current_user_team_join_code_or_raise = AsyncMock(
+        side_effect=team_services.UserNotInTeamError()
+    )
+    monkeypatch.setattr(
+        team_services,
+        "get_current_user_team_join_code_or_raise",
+        mock_get_current_user_team_join_code_or_raise,
+    )
+
+    response = client.get("/api/v1/teams/me/join-code")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "User is not in a team"
+    mock_get_current_user_team_join_code_or_raise.assert_awaited_once()
+
+
+def test_get_my_team_join_code_team_not_found(
+    client,
+    override_current_user,
+    monkeypatch,
+):
+    override_current_user(User(id=1, role=UserRole.ADMIN, team_id=2))
+    mock_get_current_user_team_join_code_or_raise = AsyncMock(
+        side_effect=team_services.TeamNotFoundError()
+    )
+    monkeypatch.setattr(
+        team_services,
+        "get_current_user_team_join_code_or_raise",
+        mock_get_current_user_team_join_code_or_raise,
+    )
+
+    response = client.get("/api/v1/teams/me/join-code")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Team not found"
+    mock_get_current_user_team_join_code_or_raise.assert_awaited_once()
 
 
 def test_remove_team_member_success(client, override_current_user, monkeypatch):

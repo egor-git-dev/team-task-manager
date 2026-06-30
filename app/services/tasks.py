@@ -96,6 +96,12 @@ async def update_task_or_raise(
     update_fields = set(update_data)
     if current_user.team_id != task.team_id:
         raise TaskNotFoundError()
+    if "assignee_id" in update_data and update_data["assignee_id"] is not None:
+        assignee = await user_crud.get_user_by_id(update_data["assignee_id"], db)
+        if assignee is None:
+            raise TaskAssigneeNotFoundError()
+        if assignee.team_id != task.team_id:
+            raise TaskAssigneeTeamMismatchError()
     if current_user.id == task.creator_id:
         return await task_crud.update_task(task, task_data, db)
     if current_user.role in {UserRole.MANAGER, UserRole.ADMIN}:

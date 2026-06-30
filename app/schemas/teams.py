@@ -27,3 +27,7 @@ class TeamWithMembersRead(TeamRead):
 
 class TeamWithJoinCodeRead(TeamRead):
     join_code: str
+
+
+class TeamJoinCodeRead(BaseModel):
+    join_code: str

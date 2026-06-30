@@ -52,11 +52,17 @@ def generate_join_code() -> str:
     return "".join(secrets.choice(JOIN_CODE_ALPHABET) for _ in range(JOIN_CODE_LENGTH))
 
 
-async def create_team(team_data: TeamCreate, db: AsyncSession) -> Team:
+async def create_team(
+    team_data: TeamCreate, current_user: User, db: AsyncSession
+) -> Team:
+    if current_user.role != UserRole.ADMIN:
+        raise TeamPermissionError()
     for _ in range(JOIN_CODE_GENERATION_ATTEMPTS):
         join_code = generate_join_code()
         if await team_crud.get_team_by_join_code(join_code, db) is None:
-            return await team_crud.create_team(team_data, join_code, db)
+            team = await team_crud.create_team(team_data, join_code, db)
+            await user_crud.update_user_team(current_user, team.id, db)
+            return team
 
     raise TeamJoinCodeGenerationError()
 
@@ -85,7 +91,7 @@ async def get_current_user_team_or_raise(current_user: User, db: AsyncSession) -
 async def remove_team_member_or_raise(
     member_id: int, current_user: User, db: AsyncSession
 ) -> None:
-    if current_user.role not in {UserRole.MANAGER, UserRole.ADMIN}:
+    if current_user.role != UserRole.ADMIN:
         raise TeamPermissionError()
     if current_user.team_id is None:
         raise UserNotInTeamError()
@@ -116,3 +122,16 @@ async def update_team_member_role_or_raise(
         raise TeamMemberNotFoundError()
 
     return await user_crud.update_user_role(member, role_data.role, db)
+
+
+async def get_current_user_team_join_code_or_raise(
+    current_user: User, db: AsyncSession
+) -> Team:
+    if current_user.role != UserRole.ADMIN:
+        raise TeamPermissionError()
+    if current_user.team_id is None:
+        raise UserNotInTeamError()
+    team = await team_crud.get_team_by_id(current_user.team_id, db)
+    if team is None:
+        raise TeamNotFoundError()
+    return team
