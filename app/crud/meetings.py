@@ -53,7 +53,7 @@ async def get_user_meetings(user_id: int, db: AsyncSession) -> list[Meeting]:
 
 
 async def has_time_overlap(
-    participant_id: int,
+    user_id: int,
     starts_at: datetime,
     ends_at: datetime,
     db: AsyncSession,
@@ -61,7 +61,10 @@ async def has_time_overlap(
     # Два интервала пересекаются, если начало одного раньше конца другого,
     # а конец одного позже начала другого.
     query = select(Meeting).where(
-        Meeting.participant_id == participant_id,
+        or_(
+            Meeting.participant_id == user_id,
+            Meeting.creator_id == user_id,
+        ),
         Meeting.is_cancelled.is_(False),
         Meeting.starts_at < ends_at,
         Meeting.ends_at > starts_at,
